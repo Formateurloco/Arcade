@@ -1430,7 +1430,7 @@
             const b=g.blocks[i];
             if(ball.x+BALL_R>b.x&&ball.x-BALL_R<b.x+b.w&&ball.y+BALL_R>b.y&&ball.y-BALL_R<b.y+b.h){
               const ox=Math.min(ball.x+BALL_R-b.x,b.x+b.w-(ball.x-BALL_R)),oy=Math.min(ball.y+BALL_R-b.y,b.y+b.h-(ball.y-BALL_R));
-              if(ox<oy){ball.vx=-ball.vx;ball.x+=ball.vx>0?ox:-ox;}else{ball.vy=-ball.vy;ball.y+=ball.vy>0?oy:-oy;}
+              if(ox<oy){ball.vx=-ball.vx;ball.x=ball.x<b.x+b.w/2?b.x-BALL_R:b.x+b.w+BALL_R;}else{ball.vy=-ball.vy;ball.y=ball.y<b.y+b.h/2?b.y-BALL_R:b.y+b.h+BALL_R;}
               b.hp--;
               if(b.hp<=0){
                 const rndTypes=['narrow','slow','life'];
