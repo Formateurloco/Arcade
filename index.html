@@ -193,10 +193,18 @@
 
             <button onClick={() => { getAudio(); onSelect('candy'); }}
                     className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
-                    style={{ '--clr':'#38d4ff', borderColor:'rgba(56,212,255,0.35)', background:'rgba(56,212,255,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'3s', gridColumn:'span 2' }}>
+                    style={{ '--clr':'#38d4ff', borderColor:'rgba(56,212,255,0.35)', background:'rgba(56,212,255,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'3s' }}>
               <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #38d4ff)' }}>🍬👧</span>
               <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#38d4ff', textShadow:'0 0 8px #38d4ff', letterSpacing:'.08em' }}>CANDY DASH</span>
-              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Glisse le bonbon et échappe aux enfants gourmands !</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Glisse le bonbon et échappe aux enfants !</span>
+            </button>
+
+            <button onClick={() => { getAudio(); onSelect('cannonbreak'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#ffd700', borderColor:'rgba(255,215,0,0.35)', background:'rgba(255,215,0,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'3.7s' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #ffd700)' }}>💣🏴‍☠️</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#ffd700', textShadow:'0 0 8px #ffd700', letterSpacing:'.08em' }}>CANON BREAK</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Détruis le trésor avec tes boulets !</span>
             </button>
           </div>
         </div>
@@ -1116,146 +1124,127 @@
 
     // ── Pirate Fire ─────────────────────────────────────────────────────────
     function PirateGame({ onBack }) {
-      const [started, setStarted] = useState(false);
-      const [gameOver, setGameOver] = useState(false);
-      const [score, setScore] = useState(0);
-      const [lives, setLives] = useState(3);
-      const [shipX, setShipX] = useState(50);
-      const [missiles, setMissiles] = useState([]);
-      const [enemies, setEnemies] = useState([]);
-      const [power, setPower] = useState(false);
-      const [powerTimer, setPowerTimer] = useState(0);
-      const [message, setMessage] = useState('Tire des boulets, protège ton navire et prends le double canon.');
+      const [started,    setStarted]    = useState(false);
+      const [gameOver,   setGameOver]   = useState(false);
+      const [score,      setScore]      = useState(0);
+      const [lives,      setLives]      = useState(3);
+      const [shipX,      setShipX]      = useState(50);
+      const [missiles,   setMissiles]   = useState([]);
+      const [enemies,    setEnemies]    = useState([]);
+      const [activePower,setActivePower]= useState(null);
+      const [shield,     setShield]     = useState(false);
+      const [boom,       setBoom]       = useState(false);
 
-      const shipXRef = useRef(50);
-      const livesRef = useRef(3);
-      const scoreRef = useRef(0);
-      const powerRef = useRef(false);
-      const gameAreaRef = useRef(null);
+      const shipXRef  = useRef(50);
+      const livesRef  = useRef(3);
+      const scoreRef  = useRef(0);
+      const pwrRef    = useRef(null);
+      const shieldRef = useRef(false);
       const missilesRef = useRef([]);
-      const movingLeftRef = useRef(false);
-      const movingRightRef = useRef(false);
+      const movL = useRef(false);
+      const movR = useRef(false);
 
-      useEffect(() => { shipXRef.current = shipX; }, [shipX]);
-      useEffect(() => { livesRef.current = lives; }, [lives]);
-      useEffect(() => { scoreRef.current = score; }, [score]);
-      useEffect(() => { powerRef.current = power; }, [power]);
-      useEffect(() => { missilesRef.current = missiles; }, [missiles]);
+      useEffect(() => { shipXRef.current  = shipX;        }, [shipX]);
+      useEffect(() => { livesRef.current  = lives;        }, [lives]);
+      useEffect(() => { scoreRef.current  = score;        }, [score]);
+      useEffect(() => { pwrRef.current    = activePower;  }, [activePower]);
+      useEffect(() => { shieldRef.current = shield;       }, [shield]);
+      useEffect(() => { missilesRef.current = missiles;   }, [missiles]);
 
+      const PWRS = {
+        triple:{ label:'3 MISSILES', color:'#ffd700', icon:'⚡', bg:'rgba(255,215,0,.95)', sh:'rgba(255,215,0,.7)' },
+        bomb:  { label:'BOMBE ZONE',  color:'#ff4444', icon:'💣', bg:'rgba(255,60,60,.95)',  sh:'rgba(255,60,60,.7)' },
+        speed: { label:'TURBO',       color:'#00ff88', icon:'🟢', bg:'rgba(0,210,110,.95)',  sh:'rgba(0,210,110,.7)' },
+        shield:{ label:'BOUCLIER',    color:'#4488ff', icon:'🛡️', bg:'rgba(68,136,255,.95)', sh:'rgba(68,136,255,.7)' },
+      };
+
+      // Movement
       useEffect(() => {
         if (!started || gameOver) return;
-        const moveInterval = setInterval(() => {
-          if (movingLeftRef.current) {
-            setShipX(x => { const nx = Math.max(6, x - 2.5); shipXRef.current = nx; return nx; });
-          }
-          if (movingRightRef.current) {
-            setShipX(x => { const nx = Math.min(94, x + 2.5); shipXRef.current = nx; return nx; });
-          }
+        const iv = setInterval(() => {
+          if (movL.current) setShipX(x => { const nx=Math.max(6,x-2.5);  shipXRef.current=nx; return nx; });
+          if (movR.current) setShipX(x => { const nx=Math.min(94,x+2.5); shipXRef.current=nx; return nx; });
         }, 16);
-        return () => clearInterval(moveInterval);
+        return () => clearInterval(iv);
       }, [started, gameOver]);
 
-      function reset() {
-        setStarted(true);
-        setGameOver(false);
-        setScore(0);
-        setLives(3);
-        setShipX(50);
-        setMissiles([]);
-        setEnemies([]);
-        setPower(false);
-        setPowerTimer(0);
-        setMessage('Tire des boulets, protège ton navire et prends le double canon.');
-      }
-
-      function fire() {
-        if (!started || gameOver) return;
-        const center = shipXRef.current;
-        const base = { id: randomId(), x: center, y: 86 };
-        const shots = [{ ...base }];
-        if (powerRef.current) {
-          shots.push({ id: randomId(), x: center - 6, y: 86 });
-          shots.push({ id: randomId(), x: center + 6, y: 86 });
-        }
-        setMissiles(prev => [...prev, ...shots]);
-      }
-
+      // Auto-fire
       useEffect(() => {
         if (!started || gameOver) return;
-        const step = setInterval(() => {
-          setMissiles(prev => prev
-            .map(m => ({ ...m, y: m.y - 4.5 }))
-            .filter(m => m.y > -6)
-          );
-          setEnemies(prev => {
-            const next = [];
-            prev.forEach(enemy => {
-              const speed = 0.85 + scoreRef.current * 0.012;
-              const newY = enemy.y + speed;
-              const hitByMissile = missilesRef.current.some(m => Math.abs(m.x - enemy.x) < 12 && Math.abs(m.y - newY) < 11);
-              if (hitByMissile) {
-                setScore(s => s + (enemy.type === 'power' ? 18 : 16));
-                if (enemy.type === 'power') {
-                  setPower(true);
-                  setPowerTimer(300);
-                  setMessage('Double canon activé !');
+        const iv = setInterval(() => {
+          const cx=shipXRef.current, spd=pwrRef.current==='speed'?7.5:4.5;
+          const shots=[{id:randomId(),x:cx,y:86,spd}];
+          if (pwrRef.current==='triple'){shots.push({id:randomId(),x:cx-9,y:86,spd});shots.push({id:randomId(),x:cx+9,y:86,spd});}
+          setMissiles(p=>[...p,...shots]);
+        }, activePower==='speed'?260:460);
+        return () => clearInterval(iv);
+      }, [started, gameOver, activePower]);
+
+      // Game loop
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const iv = setInterval(() => {
+          setMissiles(p=>p.map(m=>({...m,y:m.y-(m.spd||4.5)})).filter(m=>m.y>-6));
+          setEnemies(prev=>{
+            const next=[]; let doBomb=false;
+            prev.forEach(e=>{
+              const spd=0.7+scoreRef.current*0.01, ny=e.y+spd;
+              const hit=missilesRef.current.some(m=>Math.abs(m.x-e.x)<12&&Math.abs(m.y-ny)<11);
+              if(hit){
+                setScore(s=>s+(e.ptype?20:16));
+                if(e.ptype==='bomb'){doBomb=true;}
+                else if(e.ptype==='shield'){setShield(true);shieldRef.current=true;}
+                else if(e.ptype){setActivePower(e.ptype);}
+                return;
+              }
+              if(ny>94){
+                if(!e.ptype){
+                  if(shieldRef.current){setShield(false);shieldRef.current=false;}
+                  else setLives(l=>{const nl=Math.max(0,l-1);if(nl<=0)setGameOver(true);return nl;});
                 }
                 return;
               }
-              if (newY > 94) {
-                if (enemy.type !== 'power') {
-                  setLives(l => {
-                    const nextLives = Math.max(0, l - 1);
-                    if (nextLives <= 0) setGameOver(true);
-                    return nextLives;
-                  });
-                }
+              if(!e.ptype&&ny>70&&Math.abs(e.x-shipXRef.current)<9){
+                if(shieldRef.current){setShield(false);shieldRef.current=false;}
+                else setLives(l=>{const nl=Math.max(0,l-1);if(nl<=0)setGameOver(true);return nl;});
                 return;
               }
-              if (enemy.type !== 'power' && newY > 70 && Math.abs(enemy.x - shipXRef.current) < 9) {
-                setLives(l => {
-                  const nextLives = Math.max(0, l - 1);
-                  if (nextLives <= 0) setGameOver(true);
-                  return nextLives;
-                });
-                return;
-              }
-              next.push({ ...enemy, y: newY });
+              next.push({...e,y:ny});
             });
+            if(doBomb){setBoom(true);setTimeout(()=>setBoom(false),500);setScore(s=>s+next.length*5);return [];}
             return next;
           });
         }, 22);
-        return () => clearInterval(step);
+        return () => clearInterval(iv);
       }, [started, gameOver]);
 
+      // Spawn
       useEffect(() => {
         if (!started || gameOver) return;
-        const spawn = setInterval(() => {
-          const roll = Math.random();
-          const id = randomId();
-          if (roll < 0.16) {
-            setEnemies(prev => [...prev, { id, x: 12 + Math.random() * 76, y: -10, type: 'power' }]);
-          } else {
-            setEnemies(prev => [...prev, { id, x: 10 + Math.random() * 80, y: -12, type: 'boat' }]);
-          }
-        }, Math.max(550, 1000 - scoreRef.current * 6));
-        return () => clearInterval(spawn);
+        const iv = setInterval(() => {
+          const r=Math.random(),id=randomId();
+          const pt=r<.06?'triple':r<.12?'bomb':r<.18?'speed':r<.24?'shield':null;
+          setEnemies(p=>[...p,{id,y:-12,x:8+Math.random()*84,ptype:pt}]);
+        }, Math.max(500,980-scoreRef.current*5));
+        return () => clearInterval(iv);
       }, [started, gameOver]);
 
+      // Power countdown (triple & speed only, shield is instant)
       useEffect(() => {
-        if (!power || gameOver) return;
-        const timer = setInterval(() => {
-          setPowerTimer(prev => {
-            if (prev <= 1) {
-              setPower(false);
-              setMessage('Canon simple');
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 220);
-        return () => clearInterval(timer);
-      }, [power, gameOver]);
+        if(!activePower||activePower==='shield'||gameOver) return;
+        let t=280;
+        const iv=setInterval(()=>{t--;if(t<=0){setActivePower(null);clearInterval(iv);}},22);
+        return ()=>clearInterval(iv);
+      }, [activePower, gameOver]);
+
+      function reset() {
+        setStarted(true);setGameOver(false);setScore(0);setLives(3);
+        setShipX(50);setMissiles([]);setEnemies([]);
+        setActivePower(null);setShield(false);setBoom(false);
+        shieldRef.current=false;pwrRef.current=null;
+      }
+
+      const pInfo=activePower?PWRS[activePower]:null;
 
       return (
         <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
@@ -1266,102 +1255,250 @@
 
           <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{ flexShrink:0 }}>
             <div className="flex items-center gap-3">
-              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>
-                ← MENU
-              </button>
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>← MENU</button>
               <div>
-                <h1 className="font-black tracking-widest leading-tight" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.1rem', color:'#22d3ee', textShadow:'0 0 10px #22d3ee,0 0 22px #22d3ee60' }}>PIRATE FIRE</h1>
+                <h1 className="font-black tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.1rem', color:'#22d3ee', textShadow:'0 0 10px #22d3ee' }}>PIRATE FIRE</h1>
                 <div className="flex items-center gap-1 mt-0.5">
-                  {[0,1,2].map(i => (
-                    <span key={i} style={{ fontSize:'.95rem', opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>
-                  ))}
+                  {[0,1,2].map(i=><span key={i} style={{ fontSize:'.9rem', opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>)}
+                  {shield&&<span style={{ fontSize:'.9rem', filter:'drop-shadow(0 0 6px #4488ff)' }}>🛡️</span>}
                 </div>
               </div>
             </div>
             <div className="text-right">
               <p className="score-text font-black" style={{ fontSize:'1.6rem', lineHeight:1 }}>{score}</p>
-              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.6rem', fontWeight:900, letterSpacing:'.05em', color:'#22d3ee' }}>{power ? '⚡ Double canon' : 'Canon simple'}</div>
+              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.6rem', fontWeight:900, color:pInfo?pInfo.color:'#22d3ee' }}>{pInfo?`${pInfo.icon} ${pInfo.label}`:'🚢 AUTO-FEU'}</div>
             </div>
           </div>
 
-          <div ref={gameAreaRef} className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10"
+          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10"
                style={{ flex:1, minHeight:0, background:'linear-gradient(180deg,#80dfff 0%,#0b1f36 80%)', border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 0 50px rgba(0,0,0,.25),0 20px 60px rgba(0,0,0,.7)' }}>
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#04223f] to-transparent" />
-            <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/15 to-transparent" />
-            <div className="absolute inset-x-0 top-14 h-1 bg-white/30" />
-            <div className="absolute inset-x-0 bottom-12 h-1 bg-white/20" />
-            <div className="absolute inset-x-0 bottom-23 h-2 bg-white/15" />
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#04223f] to-transparent"/>
+            <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/15 to-transparent"/>
+            <div className="absolute inset-x-0 top-14 h-1 bg-white/30"/>
+            <div className="absolute inset-x-0 bottom-12 h-1 bg-white/20"/>
+            {boom&&<div className="absolute inset-0 z-20 flex items-center justify-center" style={{ background:'rgba(255,80,0,.3)', animation:'shake .35s ease-out' }}><span style={{ fontSize:'5rem', filter:'drop-shadow(0 0 40px #ff4400)' }}>💥</span></div>}
 
-            {enemies.map(enemy => (
-              <div key={enemy.id} className="absolute" style={{ left:`${enemy.x}%`, top:`${enemy.y}%`, width:'42px', height:'42px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'14px', background: enemy.type === 'power' ? 'rgba(255,215,90,0.95)' : 'rgba(30,30,50,0.95)', boxShadow: enemy.type === 'power' ? '0 0 18px rgba(255,215,90,0.7)' : '0 0 14px rgba(0,0,0,0.4)' }}>
-                <span style={{ fontSize:'1.7rem' }}>{enemy.type === 'power' ? '⚡' : '🚢'}</span>
-              </div>
-            ))}
+            {enemies.map(e=>{
+              const pd=e.ptype?PWRS[e.ptype]:null;
+              return <div key={e.id} className="absolute" style={{ left:`${e.x}%`, top:`${e.y}%`, transform:'translateX(-50%)', width:'42px', height:'42px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'14px', background:pd?pd.bg:'rgba(30,30,50,.95)', boxShadow:pd?`0 0 18px ${pd.sh}`:'0 0 14px rgba(0,0,0,.4)' }}><span style={{ fontSize:'1.7rem' }}>{pd?pd.icon:'🚢'}</span></div>;
+            })}
+            {missiles.map(m=><div key={m.id} className="absolute" style={{ left:`${m.x}%`, top:`${m.y}%`, transform:'translateX(-50%)', width:'8px', height:'16px', background:'#fffbeb', borderRadius:'4px', boxShadow:'0 0 14px rgba(255,255,255,.7)' }}/>)}
 
-            {missiles.map(missile => (
-              <div key={missile.id} className="absolute" style={{ left:`${missile.x}%`, top:`${missile.y}%`, width:'8px', height:'16px', background:'#fffbeb', borderRadius:'4px', boxShadow:'0 0 14px rgba(255,255,255,0.7)' }} />
-            ))}
+            <div style={{ position:'absolute', left:`calc(${shipX}% - 24px)`, bottom:'10%', width:'48px', height:'48px', borderRadius:'14px', background:shield?'#0c2a6a':'#0f172a', border:`2px solid ${shield?'rgba(68,136,255,.8)':'rgba(255,255,255,.12)'}`, boxShadow:shield?'0 0 22px rgba(68,136,255,.7)':'0 0 22px rgba(0,0,0,.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem' }}>🚢</div>
 
-            <div style={{ position:'absolute', left:`calc(${shipX}% - 24px)`, bottom:'10%', width:'48px', height:'48px', borderRadius:'14px', background:'#0f172a', border:'2px solid rgba(255,255,255,0.12)', boxShadow:'0 0 22px rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', color:'#f8fafc' }}>
-              🚢
-            </div>
-
-            {!started && !gameOver && (
+            {!started&&!gameOver&&(
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(3,10,30,.92)', backdropFilter:'blur(4px)' }}>
                 <p className="text-5xl mb-3">🏴‍☠️</p>
-                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">BATAILLE PIRATE</h2>
-                <p className="text-slate-300 text-center text-sm mb-5 px-8 leading-relaxed">
-                  Touche les autres bateaux avec tes missiles.
-                  Ramasse un coffre pour activer le double canon.
-                </p>
-                <button onClick={reset}
-                        className="rounded-full px-10 py-4 text-xl font-black text-white"
-                        style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee,0 0 60px #0ea5e9', fontFamily:'Orbitron,sans-serif' }}>
-                  JOUER ▶
-                </button>
+                <h2 className="text-3xl font-black mb-2 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', color:'#22d3ee', textShadow:'0 0 10px #22d3ee' }}>BATAILLE PIRATE</h2>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Ton navire tire automatiquement !<br/>Déplace-le pour viser les ennemis.</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{ fontSize:'.65rem', fontFamily:'Orbitron,sans-serif' }}>
+                  <span style={{ color:'#ffd700' }}>⚡ Triple missiles</span>
+                  <span style={{ color:'#ff4444' }}>💣 Bombe de zone</span>
+                  <span style={{ color:'#00ff88' }}>🟢 Turbo</span>
+                  <span style={{ color:'#4488ff' }}>🛡️ Bouclier</span>
+                </div>
+                <button onClick={reset} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee', fontFamily:'Orbitron,sans-serif' }}>JOUER ▶</button>
               </div>
             )}
-
-            {gameOver && (
+            {gameOver&&(
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(3,10,30,.94)', backdropFilter:'blur(4px)' }}>
                 <p className="text-4xl mb-3">💥</p>
-                <h2 className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>NAVIRE COULÉ</h2>
-                <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
-                <button onClick={reset}
-                        className="rounded-full px-10 py-4 text-xl font-black text-white"
-                        style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee,0 0 60px #0ea5e9', fontFamily:'Orbitron,sans-serif' }}>
-                  REJOUER ▶
-                </button>
+                <h2 className="font-black mb-2" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>NAVIRE COULÉ</h2>
+                <p className="score-text font-black mb-4" style={{ fontSize:'2.4rem' }}>{score}</p>
+                <button onClick={reset} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee', fontFamily:'Orbitron,sans-serif' }}>REJOUER ▶</button>
               </div>
             )}
           </div>
 
-          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid gap-2" style={{ gridTemplateColumns:'1fr auto 1fr', flexShrink:0 }}>
-            <button
-              onPointerDown={() => { movingLeftRef.current = true; }}
-              onPointerUp={() => { movingLeftRef.current = false; }}
-              onPointerLeave={() => { movingLeftRef.current = false; }}
-              onTouchStart={(e) => { e.preventDefault(); movingLeftRef.current = true; }}
-              onTouchEnd={() => { movingLeftRef.current = false; }}
-              className="rounded-2xl text-2xl text-white font-black"
-              style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,0.5)', fontFamily:'Orbitron,sans-serif', userSelect:'none' }}>
-              ◄◄
-            </button>
-            <button onClick={fire}
-                    className="rounded-2xl text-base text-white font-black"
-                    style={{ padding:'14px 20px', background:'linear-gradient(135deg,#f97316,#facc15)', boxShadow:'0 0 24px rgba(249,115,22,0.5)', fontFamily:'Orbitron,sans-serif', whiteSpace:'nowrap' }}>
-              🔥 TIRER
-            </button>
-            <button
-              onPointerDown={() => { movingRightRef.current = true; }}
-              onPointerUp={() => { movingRightRef.current = false; }}
-              onPointerLeave={() => { movingRightRef.current = false; }}
-              onTouchStart={(e) => { e.preventDefault(); movingRightRef.current = true; }}
-              onTouchEnd={() => { movingRightRef.current = false; }}
-              className="rounded-2xl text-2xl text-white font-black"
-              style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,0.5)', fontFamily:'Orbitron,sans-serif', userSelect:'none' }}>
-              ►►
-            </button>
+          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid grid-cols-2 gap-2" style={{ flexShrink:0 }}>
+            <button onPointerDown={()=>{movL.current=true;}} onPointerUp={()=>{movL.current=false;}} onPointerLeave={()=>{movL.current=false;}} onTouchStart={(e)=>{e.preventDefault();movL.current=true;}} onTouchEnd={()=>{movL.current=false;}}
+              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,.5)', userSelect:'none' }}>◄◄</button>
+            <button onPointerDown={()=>{movR.current=true;}} onPointerUp={()=>{movR.current=false;}} onPointerLeave={()=>{movR.current=false;}} onTouchStart={(e)=>{e.preventDefault();movR.current=true;}} onTouchEnd={()=>{movR.current=false;}}
+              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,.5)', userSelect:'none' }}>►►</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Canon Break ──────────────────────────────────────────────────────────
+    function CannonBreak({ onBack }) {
+      const GW=360,GH=540,COLS=7,ROWS=5,BH=24,BALL_R=9,PAD_H=13;
+      const BW=Math.floor((GW-16)/COLS);
+      const BDEFS=[
+        {color:'#aa44ff',pts:30,hp:2,bonus:'multiball'},
+        {color:'#ff4444',pts:20,hp:2,bonus:null},
+        {color:'#00ff88',pts:15,hp:1,bonus:'wide'},
+        {color:'#22d3ee',pts:12,hp:1,bonus:null},
+        {color:'#ffd700',pts:10,hp:1,bonus:null},
+      ];
+      const BNUS={wide:{color:'#00ff88',icon:'⚓'},narrow:{color:'#ff4444',icon:'☠️'},multiball:{color:'#aa44ff',icon:'💣'},slow:{color:'#22d3ee',icon:'🌊'},life:{color:'#ff2244',icon:'❤️'}};
+
+      const canvasRef=useRef(null),gRef=useRef(null),rafRef=useRef(null),movRef=useRef(0),phaseRef=useRef('menu');
+      const [phase,setPhase]=useState('menu');
+      const [uiScore,setUiScore]=useState(0);
+      const [uiLives,setUiLives]=useState(3);
+      const [won,setWon]=useState(false);
+
+      function mkBall(x,y){const a=-Math.PI/2+(Math.random()*.5-.25),s=5;return{x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s};}
+      function initBlocks(){const b=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const d=BDEFS[r];b.push({x:8+c*BW,y:55+r*(BH+5),w:BW-4,h:BH,hp:d.hp,maxHp:d.hp,color:d.color,pts:d.pts,bonus:d.bonus});}return b;}
+
+      function startGame(){
+        const pw=110;
+        gRef.current={balls:[mkBall(GW/2,GH-80)],pad:{x:(GW-pw)/2,y:GH-36,w:pw},blocks:initBlocks(),bonuses:[],score:0,lives:3};
+        phaseRef.current='playing';setPhase('playing');setUiScore(0);setUiLives(3);setWon(false);
+      }
+
+      function applyBonus(type,g){
+        playEat();
+        if(type==='wide')     g.pad.w=Math.min(210,g.pad.w+44);
+        if(type==='narrow')   g.pad.w=Math.max(36,g.pad.w-32);
+        if(type==='multiball'){const b=g.balls[0]||{x:GW/2,y:GH-80};g.balls.push(mkBall(b.x,b.y));}
+        if(type==='slow')     g.balls.forEach(b=>{b.vx*=.72;b.vy*=.72;});
+        if(type==='life')     {g.lives=Math.min(5,g.lives+1);setUiLives(g.lives);}
+      }
+
+      function gameUpdate(){
+        const g=gRef.current;if(!g)return;
+        const PS=5.5;
+        if(movRef.current<0)g.pad.x=Math.max(0,g.pad.x-PS);
+        if(movRef.current>0)g.pad.x=Math.min(GW-g.pad.w,g.pad.x+PS);
+        g.bonuses=g.bonuses.filter(bn=>{
+          bn.y+=2.2;
+          if(bn.y>g.pad.y&&bn.y<g.pad.y+PAD_H&&bn.x>g.pad.x&&bn.x<g.pad.x+g.pad.w){applyBonus(bn.type,g);return false;}
+          return bn.y<GH+20;
+        });
+        const kept=[];let lost=false;
+        g.balls.forEach(ball=>{
+          ball.x+=ball.vx;ball.y+=ball.vy;
+          if(ball.x-BALL_R<0){ball.x=BALL_R;ball.vx=Math.abs(ball.vx);}
+          if(ball.x+BALL_R>GW){ball.x=GW-BALL_R;ball.vx=-Math.abs(ball.vx);}
+          if(ball.y-BALL_R<0){ball.y=BALL_R;ball.vy=Math.abs(ball.vy);}
+          if(ball.vy>0&&ball.y+BALL_R>g.pad.y&&ball.y-BALL_R<g.pad.y+PAD_H&&ball.x>g.pad.x-4&&ball.x<g.pad.x+g.pad.w+4){
+            ball.y=g.pad.y-BALL_R;
+            const hp=(ball.x-g.pad.x)/g.pad.w,angle=(hp-.5)*(Math.PI*.65),sp=Math.sqrt(ball.vx*ball.vx+ball.vy*ball.vy);
+            ball.vx=Math.sin(angle)*sp;ball.vy=-Math.abs(Math.cos(angle)*sp);
+          }
+          for(let i=g.blocks.length-1;i>=0;i--){
+            const b=g.blocks[i];
+            if(ball.x+BALL_R>b.x&&ball.x-BALL_R<b.x+b.w&&ball.y+BALL_R>b.y&&ball.y-BALL_R<b.y+b.h){
+              const ox=Math.min(ball.x+BALL_R-b.x,b.x+b.w-(ball.x-BALL_R)),oy=Math.min(ball.y+BALL_R-b.y,b.y+b.h-(ball.y-BALL_R));
+              if(ox<oy)ball.vx=-ball.vx;else ball.vy=-ball.vy;
+              b.hp--;
+              if(b.hp<=0){
+                const bt=b.bonus||(Math.random()<.14?(['narrow','slow','life'][Math.floor(Math.random()*3)]):null);
+                if(bt)g.bonuses.push({x:b.x+b.w/2,y:b.y+b.h/2,type:bt});
+                g.blocks.splice(i,1);g.score+=b.pts;setUiScore(g.score);playEat();
+              }
+              break;
+            }
+          }
+          if(ball.y-BALL_R>GH){lost=true;return;}
+          kept.push(ball);
+        });
+        g.balls=kept;
+        if(lost&&g.balls.length===0){
+          g.lives--;setUiLives(g.lives);playMiss();
+          if(g.lives<=0){phaseRef.current='over';setPhase('over');return;}
+          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20)];
+        }
+        if(g.blocks.length===0){phaseRef.current='over';setWon(true);setPhase('over');}
+      }
+
+      function gameDraw(){
+        const canvas=canvasRef.current;if(!canvas)return;
+        const ctx=canvas.getContext('2d'),g=gRef.current;
+        const bg=ctx.createLinearGradient(0,0,0,GH);
+        bg.addColorStop(0,'#0a1628');bg.addColorStop(.65,'#0d2a4a');bg.addColorStop(1,'#041018');
+        ctx.fillStyle=bg;ctx.fillRect(0,0,GW,GH);
+        ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+        for(let i=0;i<7;i++){const wy=GH*.62+i*14;ctx.beginPath();ctx.moveTo(0,wy);for(let x=0;x<=GW;x+=18)ctx.lineTo(x,wy+Math.sin(x*.06+i)*3);ctx.stroke();}
+        if(!g)return;
+        g.blocks.forEach(b=>{
+          const clr=b.hp<b.maxHp?b.color+'88':b.color;
+          ctx.save();ctx.shadowColor=clr;ctx.shadowBlur=10;
+          const gr=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);gr.addColorStop(0,clr+'dd');gr.addColorStop(1,clr+'66');
+          ctx.fillStyle=gr;rrect(ctx,b.x,b.y,b.w,b.h,5);ctx.fill();ctx.strokeStyle=clr;ctx.lineWidth=1;ctx.stroke();ctx.restore();
+        });
+        g.bonuses.forEach(bn=>{
+          const d=BNUS[bn.type];ctx.save();ctx.shadowColor=d.color;ctx.shadowBlur=14;
+          ctx.fillStyle=d.color+'cc';ctx.beginPath();ctx.arc(bn.x,bn.y,13,0,Math.PI*2);ctx.fill();ctx.restore();
+          ctx.font='13px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d.icon,bn.x,bn.y);
+        });
+        ctx.save();ctx.shadowColor='#22d3ee';ctx.shadowBlur=20;
+        const pg=ctx.createLinearGradient(g.pad.x,g.pad.y,g.pad.x,g.pad.y+PAD_H);
+        pg.addColorStop(0,'#38e8ff');pg.addColorStop(1,'#0ea5e9');
+        ctx.fillStyle=pg;rrect(ctx,g.pad.x,g.pad.y,g.pad.w,PAD_H,6);ctx.fill();ctx.restore();
+        g.balls.forEach(ball=>{
+          ctx.save();ctx.shadowColor='#fffbeb';ctx.shadowBlur=22;
+          const bg2=ctx.createRadialGradient(ball.x-3,ball.y-3,1,ball.x,ball.y,BALL_R);
+          bg2.addColorStop(0,'#fff');bg2.addColorStop(.4,'#aaa');bg2.addColorStop(1,'#333');
+          ctx.fillStyle=bg2;ctx.beginPath();ctx.arc(ball.x,ball.y,BALL_R,0,Math.PI*2);ctx.fill();ctx.restore();
+        });
+      }
+
+      useEffect(()=>{
+        if(phase!=='playing')return;
+        let last=0;
+        function loop(t){
+          if(phaseRef.current!=='playing')return;
+          if(t-last>=16){last=t;gameUpdate();gameDraw();}
+          rafRef.current=requestAnimationFrame(loop);
+        }
+        rafRef.current=requestAnimationFrame(loop);
+        return()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);};
+      },[phase]);
+
+      useEffect(()=>{gameDraw();},[]);
+
+      return (
+        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
+             style={{ height:'100dvh', background:'radial-gradient(circle at 30% 10%,#0a3060 0%,#041018 60%)', position:'relative' }}>
+          <div className="blob" style={{ width:200,height:200,background:'#1155aa',top:-60,left:-50 }}/>
+          <div className="blob" style={{ width:160,height:160,background:'#ffd700',bottom:80,right:-40,animationDelay:'4s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{ flexShrink:0 }}>
+            <div className="flex items-center gap-3">
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>← MENU</button>
+              <div>
+                <h1 className="font-black tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.1rem', color:'#ffd700', textShadow:'0 0 10px #ffd700' }}>CANON BREAK</h1>
+                <div className="flex items-center gap-1 mt-0.5">
+                  {[0,1,2,3,4].map(i=><span key={i} style={{ fontSize:'.9rem', opacity:i<uiLives?1:.15, filter:i<uiLives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>)}
+                </div>
+              </div>
+            </div>
+            <p className="score-text font-black" style={{ fontSize:'1.6rem' }}>{uiScore}</p>
+          </div>
+
+          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{ flex:1, minHeight:0 }}>
+            <canvas ref={canvasRef} width={GW} height={GH} style={{ width:'100%', height:'100%', display:'block', touchAction:'none' }}/>
+            {phase==='menu'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.92)', backdropFilter:'blur(4px)' }}>
+                <p className="text-5xl mb-3">💣</p>
+                <h2 className="font-black mb-2 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.8rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>CANON BREAK</h2>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs avec le boulet !<br/>Déplace le navire avec ◄◄ et ►►</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{ fontSize:'.65rem', fontFamily:'Orbitron,sans-serif' }}>
+                  <span style={{ color:'#00ff88' }}>⚓ Barque large</span><span style={{ color:'#aa44ff' }}>💣 Double boulet</span>
+                  <span style={{ color:'#22d3ee' }}>🌊 Ralentit</span><span style={{ color:'#ff2244' }}>❤️ +1 vie</span>
+                  <span style={{ color:'#ff4444' }}>☠️ Rétrécit</span>
+                </div>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>JOUER ▶</button>
+              </div>
+            )}
+            {phase==='over'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.94)', backdropFilter:'blur(4px)' }}>
+                <p className="text-4xl mb-3">{won?'🏆':'💥'}</p>
+                <h2 className="font-black mb-2" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:won?'#ffd700':'#ff4444', textShadow:`0 0 20px ${won?'#ffd700':'#ff4444'}` }}>{won?'VICTOIRE !':'NAUFRAGE !'}</h2>
+                <p className="score-text font-black mb-4" style={{ fontSize:'2.4rem' }}>{uiScore}</p>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>REJOUER ▶</button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid grid-cols-2 gap-2" style={{ flexShrink:0 }}>
+            <button onPointerDown={()=>{movRef.current=-1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=-1;}} onTouchEnd={()=>{movRef.current=0;}}
+              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 20px rgba(255,215,0,.5)', userSelect:'none' }}>◄◄</button>
+            <button onPointerDown={()=>{movRef.current=1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=1;}} onTouchEnd={()=>{movRef.current=0;}}
+              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 20px rgba(255,215,0,.5)', userSelect:'none' }}>►►</button>
           </div>
         </div>
       );
@@ -1374,8 +1511,9 @@
       if (screen === 'neonbeat') return <RhythmGame onBack={() => setScreen('menu')}/>;
       if (screen === 'snake')    return <SnakeGame  onBack={() => setScreen('menu')}/>;
       if (screen === 'dog')      return <DogGame    onBack={() => setScreen('menu')}/>;
-      if (screen === 'candy')    return <CandyGame  onBack={() => setScreen('menu')}/>;
-      if (screen === 'pirate')   return <PirateGame onBack={() => setScreen('menu')}/>;
+      if (screen === 'candy')       return <CandyGame    onBack={() => setScreen('menu')}/>;
+      if (screen === 'pirate')      return <PirateGame   onBack={() => setScreen('menu')}/>;
+      if (screen === 'cannonbreak') return <CannonBreak  onBack={() => setScreen('menu')}/>;
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
