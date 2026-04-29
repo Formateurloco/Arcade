@@ -743,9 +743,10 @@
 
       function jump() {
         if (!started || gameOver || jumpCountRef.current >= 2) return;
+        jumpCountRef.current += 1;
         velRef.current = 0.45;
         setJumping(true);
-        setJumpCount(c => Math.min(2, c + 1));
+        setJumpCount(jumpCountRef.current);
       }
 
       useEffect(() => {
@@ -1092,9 +1093,9 @@
             )}
 
             {gameOver && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(18,3,33,.92)', backdropFilter:'blur(4px)' }}>
+              <div className="fixed inset-0 flex flex-col items-center justify-center z-50" style={{ background:'rgba(18,3,33,.92)', backdropFilter:'blur(4px)' }}>
                 <p className="text-5xl mb-3">😵</p>
-                <h2 className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>TU AS ÉTÉ ATTRAPÉ</h2>
+                <h2 className="font-black mb-3 text-center" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>TU AS ÉTÉ ATTRAPÉ</h2>
                 <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
                 <p className="text-slate-400 mb-6" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', letterSpacing:'.08em' }}>Retourne au menu ou recommence.</p>
                 <button onClick={reset}
@@ -1202,11 +1203,13 @@
                 return;
               }
               if (newY > 94) {
-                setLives(l => {
-                  const nextLives = Math.max(0, l - 1);
-                  if (nextLives <= 0) setGameOver(true);
-                  return nextLives;
-                });
+                if (enemy.type !== 'power') {
+                  setLives(l => {
+                    const nextLives = Math.max(0, l - 1);
+                    if (nextLives <= 0) setGameOver(true);
+                    return nextLives;
+                  });
+                }
                 return;
               }
               if (enemy.type !== 'power' && newY > 70 && Math.abs(enemy.x - shipXRef.current) < 9) {
