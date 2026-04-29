@@ -1353,37 +1353,54 @@
 
     // ── Canon Break ──────────────────────────────────────────────────────────
     function CannonBreak({ onBack }) {
-      const GW=360,GH=540,COLS=7,ROWS=5,BH=24,BALL_R=9,PAD_H=13;
-      const BW=Math.floor((GW-16)/COLS);
-      const BDEFS=[
-        {color:'#aa44ff',pts:30,hp:2,bonus:'multiball'},
-        {color:'#ff4444',pts:20,hp:2,bonus:null},
-        {color:'#00ff88',pts:15,hp:1,bonus:'wide'},
-        {color:'#22d3ee',pts:12,hp:1,bonus:null},
-        {color:'#ffd700',pts:10,hp:1,bonus:null},
-      ];
+      const GW=360,GH=540,BH=24,BALL_R=9,PAD_H=13;
       const BNUS={wide:{color:'#00ff88',icon:'⚓'},narrow:{color:'#ff4444',icon:'☠️'},multiball:{color:'#aa44ff',icon:'💣'},slow:{color:'#22d3ee',icon:'🌊'},life:{color:'#ff2244',icon:'❤️'}};
+      const LEVEL_NAMES=['GRILLE','PYRAMIDE','DAMIER','FORTERESSE','BOSS FINAL'];
 
       const canvasRef=useRef(null),gRef=useRef(null),rafRef=useRef(null),movRef=useRef(0),phaseRef=useRef('menu');
       const [phase,setPhase]=useState('menu');
       const [uiScore,setUiScore]=useState(0);
       const [uiLives,setUiLives]=useState(3);
+      const [uiLevel,setUiLevel]=useState(1);
       const [won,setWon]=useState(false);
+      const [levelName,setLevelName]=useState('');
 
-      function mkBall(x,y){const a=-Math.PI/2+(Math.random()*.5-.25),s=5;return{x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s};}
-      function initBlocks(){const b=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const d=BDEFS[r];b.push({x:8+c*BW,y:55+r*(BH+5),w:BW-4,h:BH,hp:d.hp,maxHp:d.hp,color:d.color,pts:d.pts,bonus:d.bonus});}return b;}
+      function mkBall(x,y,spd){const a=-Math.PI/2+(Math.random()*.5-.25);return{x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd};}
 
-      function startGame(){
-        const pw=110;
-        gRef.current={balls:[mkBall(GW/2,GH-80)],pad:{x:(GW-pw)/2,y:GH-36,w:pw},blocks:initBlocks(),bonuses:[],score:0,lives:3};
-        phaseRef.current='playing';setPhase('playing');setUiScore(0);setUiLives(3);setWon(false);
+      function buildBlocks(lvl){
+        const b=[],BW7=Math.floor((GW-16)/7),BW8=Math.floor((GW-12)/8),startY=55;
+        if(lvl===0){
+          const defs=[{color:'#aa44ff',pts:30,hp:2,bonus:'multiball'},{color:'#ff4444',pts:20,hp:2,bonus:null},{color:'#00ff88',pts:15,hp:1,bonus:'wide'},{color:'#22d3ee',pts:12,hp:1,bonus:null},{color:'#ffd700',pts:10,hp:1,bonus:null}];
+          for(let r=0;r<5;r++)for(let c=0;c<7;c++){const d=defs[r];b.push({x:8+c*BW7,y:startY+r*(BH+5),w:BW7-4,h:BH,hp:d.hp,maxHp:d.hp,color:d.color,pts:d.pts,bonus:d.bonus});}
+        } else if(lvl===1){
+          const rows=[[3,2,'#aa44ff',40,'multiball'],[5,2,'#ff4444',30,null],[7,1,'#ffd700',20,'wide'],[5,1,'#00ff88',15,null],[3,1,'#22d3ee',10,null]];
+          rows.forEach(([count,hp,color,pts,bonus],r)=>{const sc=Math.floor((7-count)/2);for(let c=0;c<count;c++)b.push({x:8+(sc+c)*BW7,y:startY+r*(BH+5),w:BW7-4,h:BH,hp,maxHp:hp,color,pts,bonus});});
+        } else if(lvl===2){
+          const defs2=[{color:'#ff4444',pts:25,hp:2,bonus:null},{color:'#ffd700',pts:20,hp:1,bonus:'wide'},{color:'#aa44ff',pts:30,hp:2,bonus:'multiball'},{color:'#00ff88',pts:15,hp:1,bonus:null},{color:'#22d3ee',pts:12,hp:1,bonus:'life'},{color:'#ff8800',pts:18,hp:2,bonus:null},{color:'#ff4444',pts:22,hp:1,bonus:null}];
+          for(let r=0;r<6;r++)for(let c=0;c<7;c++){if((r+c)%2===0){const d=defs2[(r*7+c)%defs2.length];b.push({x:8+c*BW7,y:startY+r*(BH+5),w:BW7-4,h:BH,hp:d.hp,maxHp:d.hp,color:d.color,pts:d.pts,bonus:d.bonus});}}
+        } else if(lvl===3){
+          const layout=[[1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,1],[1,0,1,0,0,1,0,1],[1,0,0,0,0,0,0,1],[1,0,1,0,0,1,0,1],[1,0,0,0,0,0,0,1],[1,1,1,1,1,1,1,1]];
+          layout.forEach((row,r)=>row.forEach((cell,c)=>{if(!cell)return;const hp=r===0||r===6?3:(r===2||r===4)&&(c===2||c===5)?2:1;const clr=hp===3?'#ff2244':hp===2?'#ff8800':'#ffd700';b.push({x:6+c*BW8,y:startY+r*(BH+4),w:BW8-3,h:BH,hp,maxHp:hp,color:clr,pts:hp*15,bonus:null});}));
+        } else {
+          const defs5=[{color:'#ff0066',pts:60,hp:3,bonus:null},{color:'#aa44ff',pts:50,hp:3,bonus:'multiball'},{color:'#ff4444',pts:40,hp:2,bonus:null},{color:'#ff8800',pts:32,hp:2,bonus:'wide'},{color:'#ffd700',pts:25,hp:2,bonus:null},{color:'#00ff88',pts:18,hp:1,bonus:'life'},{color:'#22d3ee',pts:12,hp:1,bonus:null}];
+          for(let r=0;r<7;r++)for(let c=0;c<7;c++){const d=defs5[r];b.push({x:8+c*BW7,y:startY+r*(BH+3),w:BW7-4,h:BH,hp:d.hp,maxHp:d.hp,color:d.color,pts:d.pts,bonus:d.bonus});}
+        }
+        return b;
       }
+
+      function startLevel(lvl,prevScore,prevLives){
+        const pw=110,spd=4.8+lvl*0.4;
+        gRef.current={balls:[mkBall(GW/2,GH-80,spd)],pad:{x:(GW-pw)/2,y:GH-36,w:pw},blocks:buildBlocks(lvl),bonuses:[],bonusesSpawned:new Set(),score:prevScore||0,lives:prevLives||3,level:lvl};
+        phaseRef.current='playing';setPhase('playing');setUiScore(prevScore||0);setUiLives(prevLives||3);setUiLevel(lvl+1);setLevelName(LEVEL_NAMES[lvl]);
+      }
+
+      function startGame(){setWon(false);startLevel(0,0,3);}
 
       function applyBonus(type,g){
         playEat();
         if(type==='wide')     g.pad.w=Math.min(210,g.pad.w+44);
         if(type==='narrow')   g.pad.w=Math.max(36,g.pad.w-32);
-        if(type==='multiball'){const b=g.balls[0]||{x:GW/2,y:GH-80};g.balls.push(mkBall(b.x,b.y));}
+        if(type==='multiball'){const b=g.balls[0]||{x:GW/2,y:GH-80};const spd=4.8+g.level*0.4;g.balls.push(mkBall(b.x,b.y,spd));}
         if(type==='slow')     g.balls.forEach(b=>{b.vx*=.72;b.vy*=.72;});
         if(type==='life')     {g.lives=Math.min(5,g.lives+1);setUiLives(g.lives);}
       }
@@ -1413,11 +1430,14 @@
             const b=g.blocks[i];
             if(ball.x+BALL_R>b.x&&ball.x-BALL_R<b.x+b.w&&ball.y+BALL_R>b.y&&ball.y-BALL_R<b.y+b.h){
               const ox=Math.min(ball.x+BALL_R-b.x,b.x+b.w-(ball.x-BALL_R)),oy=Math.min(ball.y+BALL_R-b.y,b.y+b.h-(ball.y-BALL_R));
-              if(ox<oy)ball.vx=-ball.vx;else ball.vy=-ball.vy;
+              if(ox<oy){ball.vx=-ball.vx;ball.x+=ball.vx>0?ox:-ox;}else{ball.vy=-ball.vy;ball.y+=ball.vy>0?oy:-oy;}
               b.hp--;
               if(b.hp<=0){
-                const bt=b.bonus||(Math.random()<.14?(['narrow','slow','life'][Math.floor(Math.random()*3)]):null);
-                if(bt)g.bonuses.push({x:b.x+b.w/2,y:b.y+b.h/2,type:bt});
+                const rndTypes=['narrow','slow','life'];
+                let bt=null;
+                if(b.bonus&&!g.bonusesSpawned.has(b.bonus)){bt=b.bonus;}
+                else if(!b.bonus&&Math.random()<.16){const t=rndTypes[Math.floor(Math.random()*rndTypes.length)];if(!g.bonusesSpawned.has(t))bt=t;}
+                if(bt){g.bonuses.push({x:b.x+b.w/2,y:b.y+b.h/2,type:bt});g.bonusesSpawned.add(bt);}
                 g.blocks.splice(i,1);g.score+=b.pts;setUiScore(g.score);playEat();
               }
               break;
@@ -1430,9 +1450,12 @@
         if(lost&&g.balls.length===0){
           g.lives--;setUiLives(g.lives);playMiss();
           if(g.lives<=0){phaseRef.current='over';setPhase('over');return;}
-          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20)];
+          const spd=4.8+g.level*0.4;g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20,spd)];
         }
-        if(g.blocks.length===0){phaseRef.current='over';setWon(true);setPhase('over');}
+        if(g.blocks.length===0){
+          if(g.level<4){phaseRef.current='levelup';setPhase('levelup');}
+          else{phaseRef.current='over';setWon(true);setPhase('over');}
+        }
       }
 
       function gameDraw(){
@@ -1448,7 +1471,9 @@
           const clr=b.hp<b.maxHp?b.color+'88':b.color;
           ctx.save();ctx.shadowColor=clr;ctx.shadowBlur=10;
           const gr=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);gr.addColorStop(0,clr+'dd');gr.addColorStop(1,clr+'66');
-          ctx.fillStyle=gr;rrect(ctx,b.x,b.y,b.w,b.h,5);ctx.fill();ctx.strokeStyle=clr;ctx.lineWidth=1;ctx.stroke();ctx.restore();
+          ctx.fillStyle=gr;rrect(ctx,b.x,b.y,b.w,b.h,5);ctx.fill();ctx.strokeStyle=clr;ctx.lineWidth=1;ctx.stroke();
+          if(b.maxHp>1){ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.hp,b.x+b.w/2,b.y+b.h/2);}
+          ctx.restore();
         });
         g.bonuses.forEach(bn=>{
           const d=BNUS[bn.type];ctx.save();ctx.shadowColor=d.color;ctx.shadowBlur=14;
@@ -1497,7 +1522,10 @@
                 </div>
               </div>
             </div>
-            <p className="score-text font-black" style={{ fontSize:'1.6rem' }}>{uiScore}</p>
+            <div className="text-right">
+              <p className="score-text font-black" style={{ fontSize:'1.6rem', lineHeight:1 }}>{uiScore}</p>
+              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.55rem', fontWeight:900, color:'#ffd700' }}>NV {uiLevel} · {levelName}</div>
+            </div>
           </div>
 
           <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{ flex:1, minHeight:0 }}>
@@ -1506,7 +1534,7 @@
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.92)', backdropFilter:'blur(4px)' }}>
                 <p className="text-5xl mb-3">💣</p>
                 <h2 className="font-black mb-2 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.8rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>CANON BREAK</h2>
-                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs avec le boulet !<br/>Déplace le navire avec ◄◄ et ►►</p>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs avec le boulet !<br/>5 niveaux aux designs variés !</p>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{ fontSize:'.65rem', fontFamily:'Orbitron,sans-serif' }}>
                   <span style={{ color:'#00ff88' }}>⚓ Barque large</span><span style={{ color:'#aa44ff' }}>💣 Double boulet</span>
                   <span style={{ color:'#22d3ee' }}>🌊 Ralentit</span><span style={{ color:'#ff2244' }}>❤️ +1 vie</span>
@@ -1515,12 +1543,22 @@
                 <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>JOUER ▶</button>
               </div>
             )}
+            {phase==='levelup'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.94)', backdropFilter:'blur(4px)' }}>
+                <p className="text-5xl mb-2">🏅</p>
+                <h2 className="font-black mb-1 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.5rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>NIVEAU TERMINÉ !</h2>
+                <p className="text-slate-300 text-sm mb-1">Prochain niveau :</p>
+                <p className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1rem', color:'#00ff88' }}>{LEVEL_NAMES[uiLevel]||''}</p>
+                <p className="score-text font-black mb-4" style={{ fontSize:'2rem' }}>{uiScore}</p>
+                <button onClick={()=>{const g=gRef.current;startLevel(g.level+1,g.score,g.lives);}} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>CONTINUER ▶</button>
+              </div>
+            )}
             {phase==='over'&&(
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.94)', backdropFilter:'blur(4px)' }}>
                 <p className="text-4xl mb-3">{won?'🏆':'💥'}</p>
                 <h2 className="font-black mb-2" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:won?'#ffd700':'#ff4444', textShadow:`0 0 20px ${won?'#ffd700':'#ff4444'}` }}>{won?'VICTOIRE !':'NAUFRAGE !'}</h2>
                 <p className="score-text font-black mb-4" style={{ fontSize:'2.4rem' }}>{uiScore}</p>
-                <button onClick={startGame} className="rounded-full px-10 py-4 text xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>REJOUER ▶</button>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>REJOUER ▶</button>
               </div>
             )}
           </div>
