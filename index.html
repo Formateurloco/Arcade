@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arcade 🕹️</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #050510; }
+
+    @keyframes float-blob {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      33%       { transform: translate(18px,-18px) scale(1.1); }
+      66%       { transform: translate(-12px,14px) scale(0.9); }
+    }
+    .blob { position:absolute; border-radius:50%; filter:blur(70px); opacity:.12; animation:float-blob 10s ease-in-out infinite; pointer-events:none; }
+
+    @keyframes hit-pulse {
+      0%,100% { box-shadow:0 0 8px #ffd700,0 0 16px #ffd70050,inset 0 0 6px #ffd70020; border-color:rgba(255,215,0,.8); }
+      50%      { box-shadow:0 0 18px #ffd700,0 0 38px #ffd700,inset 0 0 14px #ffd70040; border-color:rgba(255,215,0,1); }
+    }
+    .hit-zone { animation:hit-pulse 1.4s ease-in-out infinite; }
+
+    .note-0 { background:linear-gradient(135deg,#ff66cc,#cc00ff); box-shadow:0 0 14px #ff00ff,0 0 28px #ff00ff50; }
+    .note-1 { background:linear-gradient(135deg,#00eeff,#0055ff); box-shadow:0 0 14px #00ffff,0 0 28px #00ffff50; }
+    .note-2 { background:linear-gradient(135deg,#00ff88,#00bb44); box-shadow:0 0 14px #00ff88,0 0 28px #00ff8850; }
+    .note-3 { background:linear-gradient(135deg,#ffaa00,#ff3300); box-shadow:0 0 14px #ff8800,0 0 28px #ff880050; }
+
+    .gbtn { border:none; cursor:pointer; transition:transform .08s ease,box-shadow .08s ease; }
+    .gbtn-0 { background:linear-gradient(160deg,#ff66cc,#aa00dd); box-shadow:0 4px 20px #ff00ff40; }
+    .gbtn-1 { background:linear-gradient(160deg,#00eeff,#0055cc); box-shadow:0 4px 20px #00ffff40; }
+    .gbtn-2 { background:linear-gradient(160deg,#00ff88,#009933); box-shadow:0 4px 20px #00ff8840; }
+    .gbtn-3 { background:linear-gradient(160deg,#ffaa00,#cc2200); box-shadow:0 4px 20px #ff880040; }
+    .gbtn-0.pressed { transform:scale(.90); box-shadow:0 0 40px #ff00ff,0 0 80px #ff00ff50; }
+    .gbtn-1.pressed { transform:scale(.90); box-shadow:0 0 40px #00ffff,0 0 80px #00ffff50; }
+    .gbtn-2.pressed { transform:scale(.90); box-shadow:0 0 40px #00ff88,0 0 80px #00ff8850; }
+    .gbtn-3.pressed { transform:scale(.90); box-shadow:0 0 40px #ff8800,0 0 80px #ff880050; }
+
+    @keyframes float-up { 0%{opacity:1;transform:translateY(0) scale(1.1)} 100%{opacity:0;transform:translateY(-60px) scale(.8)} }
+    .hit-text { position:absolute; font-family:'Orbitron',sans-serif; font-size:.72rem; font-weight:900; pointer-events:none; animation:float-up .75s ease-out forwards; z-index:20; text-align:center; width:80px; letter-spacing:.03em; }
+
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+    .shaking { animation:shake .35s ease-out; }
+
+    @keyframes combo-pop { 0%{transform:scale(1.7)} 100%{transform:scale(1)} }
+    .combo-pop { animation:combo-pop .18s ease-out; }
+
+    .scanlines { background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px); pointer-events:none; }
+    .score-text { font-family:'Orbitron',sans-serif; color:#ffd700; text-shadow:0 0 12px #ffd700,0 0 24px #ffd70060; }
+    .neon-title { font-family:'Orbitron',sans-serif; color:#ff88ff; text-shadow:0 0 10px #ff00ff,0 0 22px #ff00ff60; }
+
+    @keyframes lane-flash { 0%{opacity:.5} 100%{opacity:0} }
+    .lane-flash-anim { animation:lane-flash .15s ease-out; }
+    .speed-fill { transition:width .4s ease; }
+
+    @keyframes note-appear { from{opacity:0;transform:scaleY(.5)} to{opacity:1;transform:scaleY(1)} }
+    .note-appear { animation:note-appear .12s ease-out; }
+
+    @keyframes card-glow {
+      0%,100% { box-shadow:0 0 20px var(--clr),0 0 40px rgba(255,255,255,0.16); }
+      50%      { box-shadow:0 0 35px var(--clr),0 0 70px rgba(255,255,255,0.24); }
+    }
+    .game-card { cursor:pointer; transition:transform .15s ease; }
+    .game-card:active { transform:scale(.94); }
+
+    .dpad-btn { cursor:pointer; border:none; transition:transform .08s ease,background .08s ease; }
+    .dpad-btn:active { transform:scale(.86); }
+  </style>
+</head>
+<body class="m-0 p-0">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useEffect, useState, useRef } = React;
+
+    const LABELS      = ['🌟','💎','🍀','🔥'];
+    const GLOW_COLORS = ['#ff00ff','#00ffff','#00ff88','#ff8800'];
+    const SN_COLS = 20, SN_ROWS = 20, SN_CS = 400;
+
+    // ── Audio ────────────────────────────────────────────────────────────────
+    let audioCtx = null;
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+    function playTone(freq, type, vol, dur) {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.type = type;
+        g.gain.setValueAtTime(vol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dur);
+        osc.start(); osc.stop(ctx.currentTime + dur);
+      } catch(e) {}
+    }
+    function playHit(lane)  { playTone([880,660,550,440][lane], 'sine', .22, .16); }
+    function playMiss()     { playTone(110, 'sawtooth', .12, .24); }
+    function playEat()      {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + .08);
+        g.gain.setValueAtTime(.18, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .2);
+        osc.start(); osc.stop(ctx.currentTime + .2);
+      } catch(e) {}
+    }
+    function playDie() {
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + .4);
+        g.gain.setValueAtTime(.2, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .5);
+        osc.start(); osc.stop(ctx.currentTime + .5);
+      } catch(e) {}
+    }
+
+
+    function randomId() {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+      return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    // ── Canvas helper ────────────────────────────────────────────────────────
+    function rrect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+      ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+      ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+      ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+      ctx.closePath();
+    }
+
+    // ── Menu ─────────────────────────────────────────────────────────────────
+    function MenuScreen({ onSelect }) {
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-center px-4 select-none"
+             style={{ background:'radial-gradient(ellipse at 50% -10%,#1e0040 0%,#050510 55%)', position:'relative', overflow:'hidden' }}>
+          <div className="blob" style={{ width:220,height:220,background:'#ff00ff',top:-60,left:-60 }}/>
+          <div className="blob" style={{ width:170,height:170,background:'#00ffff',bottom:70,right:-40,animationDelay:'3.5s' }}/>
+          <div className="blob" style={{ width:120,height:120,background:'#00ff88',top:'45%',left:'35%',animationDelay:'6.5s' }}/>
+
+          <p className="text-5xl mb-3 z-10" style={{ filter:'drop-shadow(0 0 20px #ff88ff)' }}>🕹️</p>
+          <h1 className="z-10 mb-1" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'2.4rem', fontWeight:900, color:'#ff88ff', textShadow:'0 0 16px #ff00ff,0 0 36px #ff00ff60', letterSpacing:'.2em' }}>ARCADE</h1>
+          <p className="text-slate-500 mb-8 z-10" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.6rem', letterSpacing:'.2em' }}>CHOISIS TON JEU</p>
+
+          <div className="w-full max-w-full lg:max-w-3xl grid grid-cols-2 gap-4 z-10">
+            <button onClick={() => { getAudio(); onSelect('neonbeat'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#ff00ff', borderColor:'rgba(255,0,255,0.35)', background:'rgba(255,0,255,0.06)', animation:'card-glow 2.5s ease-in-out infinite' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #ff00ff)' }}>⚡</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#ff88ff', textShadow:'0 0 8px #ff00ff', letterSpacing:'.08em' }}>NEON BEAT</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Frappe les notes au bon moment !</span>
+            </button>
+
+            <button onClick={() => { getAudio(); onSelect('snake'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#ff88ff', borderColor:'rgba(255,136,255,0.35)', background:'rgba(255,136,255,0.06)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'.9s' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #ff88ff)' }}>📿</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#ff88ff', textShadow:'0 0 8px #ff88ff', letterSpacing:'.08em' }}>PERLES</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Guide le collier pour attraper les perles !</span>
+            </button>
+
+            <button onClick={() => { getAudio(); onSelect('dog'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#ffd700', borderColor:'rgba(255,209,0,0.35)', background:'rgba(255,209,0,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'1.6s' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #ffd700)' }}>🤖🐶</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#ffd700', textShadow:'0 0 8px #ffd700', letterSpacing:'.08em' }}>DOG RUN</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Saute les obstacles et collecte les os !</span>
+            </button>
+
+            <button onClick={() => { getAudio(); onSelect('pirate'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#22d3ee', borderColor:'rgba(34,211,238,0.35)', background:'rgba(34,211,238,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'2.3s' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #22d3ee)' }}>🏴‍☠️⚓</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#22d3ee', textShadow:'0 0 8px #22d3ee', letterSpacing:'.08em' }}>PIRATE FIRE</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Vise et coule les navires ennemis !</span>
+            </button>
+
+            <button onClick={() => { getAudio(); onSelect('candy'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#38d4ff', borderColor:'rgba(56,212,255,0.35)', background:'rgba(56,212,255,0.08)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'3s', gridColumn:'span 2' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #38d4ff)' }}>🍬👧</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#38d4ff', textShadow:'0 0 8px #38d4ff', letterSpacing:'.08em' }}>CANDY DASH</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Glisse le bonbon et échappe aux enfants gourmands !</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Neon Beat ─────────────────────────────────────────────────────────────
+    function RhythmGame({ onBack }) {
+      const [notes,       setNotes]       = useState([]);
+      const [score,       setScore]       = useState(0);
+      const [lives,       setLives]       = useState(5);
+      const [combo,       setCombo]       = useState(0);
+      const [maxCombo,    setMaxCombo]    = useState(0);
+      const [gameOver,    setGameOver]    = useState(false);
+      const [started,     setStarted]     = useState(false);
+      const [pressedLane, setPressedLane] = useState(null);
+      const [speed,       setSpeed]       = useState(1);
+      const [feedbacks,   setFeedbacks]   = useState([]);
+      const [laneFlash,   setLaneFlash]   = useState(null);
+      const [shaking,     setShaking]     = useState(false);
+      const [comboAnim,   setComboAnim]   = useState(false);
+
+      const notesRef = useRef([]);
+      const comboRef = useRef(0);
+      const lastHitLaneRef = useRef(null);
+      useEffect(() => { notesRef.current = notes; }, [notes]);
+      useEffect(() => { comboRef.current = combo;  }, [combo]);
+
+      // vitesse monte lentement
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const t = setInterval(() => setSpeed(s => Math.min(2.4, s + 0.07)), 3500);
+        return () => clearInterval(t);
+      }, [started, gameOver]);
+
+      // spawn — intervalle plus long au début
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const delay = Math.max(420, 1500 - (speed - 1) * 420);
+        const t = setInterval(() => {
+          const note = { id:randomId(), lane:Math.floor(Math.random()*4), y:0, fresh:true };
+          setNotes(p => { const n=[...p,note]; notesRef.current=n; return n; });
+          setTimeout(() => setNotes(p => p.map(n => n.id===note.id ? {...n,fresh:false} : n)), 130);
+        }, delay);
+        return () => clearInterval(t);
+      }, [started, gameOver, speed]);
+
+      // chute — plus lente au début
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const step = 2.0 + (speed - 1) * 2.2;
+        const interval = Math.max(22, 40 - (speed - 1) * 8);
+        const t = setInterval(() => {
+          setNotes(prev => {
+            let missed = 0;
+            const next = prev.reduce((acc, n) => {
+              const moved = {...n, y:n.y+step};
+              if (moved.y > 96) missed++;
+              else acc.push(moved);
+              return acc;
+            }, []);
+            notesRef.current = next;
+            if (missed > 0) {
+              setLives(l => { const nl=Math.max(0,l-missed); if(nl<=0) setGameOver(true); return nl; });
+              comboRef.current = 0; setCombo(0);
+              setShaking(true); setTimeout(() => setShaking(false), 360);
+              for (let i=0;i<missed;i++) playMiss();
+            }
+            return next;
+          });
+        }, interval);
+        return () => clearInterval(t);
+      }, [started, gameOver, speed]);
+
+      function addFb(lane, text, color) {
+        const id = randomId();
+        setFeedbacks(p => [...p,{id,lane,text,color}]);
+        setTimeout(() => setFeedbacks(p => p.filter(f => f.id!==id)), 780);
+      }
+
+      function hitLane(i) {
+        if (!started || gameOver) return;
+        if (lastHitLaneRef.current === i) return;
+        lastHitLaneRef.current = i;
+        setTimeout(() => { lastHitLaneRef.current = null; }, 50);
+        getAudio(); setPressedLane(i); setLaneFlash(i);
+        setTimeout(() => { setPressedLane(null); setLaneFlash(null); }, 130);
+        const hit = notesRef.current.find(n => n.lane===i && n.y>67 && n.y<96);
+        if (hit) {
+          const nc = comboRef.current + 1; comboRef.current = nc;
+          const mult = nc>=20?3:nc>=10?2:nc>=5?1.5:1;
+          setNotes(p => { const n=p.filter(x=>x.id!==hit.id); notesRef.current=n; return n; });
+          setCombo(nc); setMaxCombo(m=>Math.max(m,nc)); setScore(s=>s+Math.round(10*mult));
+          setComboAnim(true); setTimeout(()=>setComboAnim(false),200);
+          const lbl = nc>=20?'⚡ PARFAIT!':nc>=10?'✨ SUPER!':nc>=5?'🔥 BIEN!':'👍 OK';
+          addFb(i, lbl, nc>=20?'#ffd700':nc>=10?'#ff00ff':nc>=5?'#00ffff':'#ffffff');
+          playHit(i);
+        } else {
+          // Trop tôt ou mauvaise case : on coupe le combo mais pas de vie perdue
+          comboRef.current = 0; setCombo(0);
+        }
+      }
+
+      function restart() {
+        notesRef.current=[]; comboRef.current=0;
+        setNotes([]); setScore(0); setLives(5); setCombo(0); setMaxCombo(0);
+        setGameOver(false); setSpeed(1); setFeedbacks([]); setStarted(true);
+      }
+
+      const mult     = combo>=20?3:combo>=10?2:combo>=5?1.5:1;
+      const speedPct = Math.round(((speed-1)/1.4)*100);
+      const speedClr = speed>2?'#ff3333':speed>1.5?'#ff8800':'#00ff88';
+      const speedLbl = speed>2?'DANGER !':speed>1.5?'RAPIDE':'NORMAL';
+
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
+             style={{ background:'radial-gradient(ellipse at 50% -10%,#1e0040 0%,#050510 55%)', position:'relative' }}>
+          <div className="blob" style={{ width:220,height:220,background:'#ff00ff',top:-60,left:-60 }}/>
+          <div className="blob" style={{ width:170,height:170,background:'#00ffff',bottom:70,right:-40,animationDelay:'3.5s' }}/>
+          <div className="blob" style={{ width:120,height:120,background:'#00ff88',top:'45%',left:'35%',animationDelay:'6.5s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-start justify-between mb-3 z-10">
+            <div>
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer', marginBottom:'4px' }}>
+                ← MENU
+              </button>
+              <h1 className="neon-title text-2xl font-black tracking-widest leading-tight">NEON<br/>BEAT</h1>
+              <div className="flex items-center gap-1 mt-1.5">
+                {[0,1,2,3,4].map(i => (
+                  <span key={i} className="text-lg" style={{ opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="score-text text-3xl font-black">{score}</p>
+              <div className={comboAnim?'combo-pop':''} style={{ minHeight:'1.4em', fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', fontWeight:900, letterSpacing:'.05em', color:combo>=2?(combo>=20?'#ffd700':combo>=10?'#ff88ff':'#00ffff'):'transparent', textShadow:combo>=2?`0 0 8px ${combo>=20?'#ffd700':combo>=10?'#ff00ff':'#00ffff'}`:'none' }}>
+                {combo>=2?`${combo}× COMBO${mult>1?` ×${mult}`:''}`:' '}
+              </div>
+            </div>
+          </div>
+
+          <div className={`relative w-full max-w-full lg:max-w-3xl rounded-3xl overflow-hidden z-10 ${shaking?'shaking':''}`}
+               style={{ height:'min(62vh,420px)', background:'#04040e', border:'1px solid rgba(255,255,255,0.07)', boxShadow:'0 0 50px rgba(255,0,255,.07),0 20px 60px rgba(0,0,0,.8)' }}>
+            <div className="scanlines absolute inset-0 z-10"/>
+            <div className="absolute inset-0 grid grid-cols-4">
+              {[0,1,2,3].map(i => (
+                <div key={i} className="relative" style={{ borderRight:i<3?'1px solid rgba(255,255,255,0.04)':'none' }}>
+                  {laneFlash===i && <div className="lane-flash-anim absolute inset-0" style={{ background:`${GLOW_COLORS[i]}18` }}/>}
+                  <div className="hit-zone absolute inset-x-2 rounded-xl border-2"
+                       style={{ bottom:'12%', height:80, borderColor:'rgba(255,215,0,.8)', background:'rgba(255,215,0,.07)' }}/>
+                </div>
+              ))}
+            </div>
+
+            {notes.map(n => (
+              <div key={n.id} className="absolute left-0 w-1/4 px-1.5"
+                   style={{ transform:`translateX(${n.lane*100}%)`, top:`${n.y}%`, transition:'none' }}>
+                <div className={`note-${n.lane} h-12 rounded-xl flex items-center justify-center text-xl ${n.fresh?'note-appear':''}`}>
+                  {LABELS[n.lane]}
+                </div>
+              </div>
+            ))}
+
+            {feedbacks.map(fb => (
+              <div key={fb.id} className="hit-text"
+                   style={{ left:`calc(${fb.lane*25+12.5}% - 40px)`, bottom:'22%', color:fb.color, textShadow:`0 0 10px ${fb.color}` }}>
+                {fb.text}
+              </div>
+            ))}
+
+            {!started && !gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20"
+                   style={{ background:'rgba(4,4,14,.93)', backdropFilter:'blur(6px)' }}>
+                <p className="text-5xl mb-4" style={{ filter:'drop-shadow(0 0 20px #ff00ff)' }}>🎵</p>
+                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">NEON BEAT</h2>
+                <p className="text-slate-400 text-center text-sm mb-5 px-6 leading-relaxed">
+                  Tapez les boutons quand les notes<br/>arrivent dans la zone dorée !
+                </p>
+                <div className="flex gap-5 mb-6 text-2xl">
+                  {LABELS.map((l,i) => <span key={i} style={{ filter:`drop-shadow(0 0 8px ${GLOW_COLORS[i]})` }}>{l}</span>)}
+                </div>
+                <button onClick={() => { getAudio(); setStarted(true); }}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#ff44aa,#aa00ff)', boxShadow:'0 0 30px #ff00ff,0 0 60px #ff00ff40', fontFamily:'Orbitron,sans-serif' }}>
+                  JOUER ▶
+                </button>
+              </div>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20"
+                   style={{ background:'rgba(4,4,14,.93)', backdropFilter:'blur(6px)' }}>
+                <p className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 20px #ffd700)' }}>⭐</p>
+                <h2 className="font-black mb-1" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>BRAVO !</h2>
+                <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
+                <p className="text-slate-500 mb-5" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', letterSpacing:'.08em' }}>MEILLEUR COMBO : {maxCombo}×</p>
+                <button onClick={restart}
+                        className="rounded-full px-10 py-4 text-xl font-black text-black"
+                        style={{ background:'linear-gradient(135deg,#ffd700,#ff6600)', boxShadow:'0 0 30px #ffd700,0 0 60px #ffd70040', fontFamily:'Orbitron,sans-serif' }}>
+                  REJOUER ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          {started && !gameOver && (
+            <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-1 z-10">
+              <div className="flex justify-between mb-1" style={{ fontSize:'.62rem', fontFamily:'Orbitron,sans-serif', letterSpacing:'.08em' }}>
+                <span className="text-slate-600">VITESSE</span>
+                <span style={{ color:speedClr }}>{speedLbl}</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,0.07)' }}>
+                <div className="speed-fill h-full rounded-full" style={{ width:`${speedPct}%`, background:`linear-gradient(90deg,${speedClr}88,${speedClr})` }}/>
+              </div>
+            </div>
+          )}
+
+          <div className="w-full max-w-full lg:max-w-3xl grid grid-cols-4 gap-2 mt-2 pb-2 z-10">
+            {LABELS.map((label,i) => (
+              <button key={i}
+                      onPointerDown={() => hitLane(i)}
+                      onMouseDown={() => hitLane(i)}
+                      onTouchStart={(e) => { e.preventDefault(); hitLane(i); }}
+                      className={`gbtn gbtn-${i} ${pressedLane===i?'pressed':''} h-28 sm:h-32 rounded-2xl text-4xl sm:text-5xl font-bold text-white`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Collier de Perles ────────────────────────────────────────────────────
+    // Couleurs arc-en-ciel qui tournent le long du collier
+    function pearlHue(idx, total) { return (idx * (360 / Math.max(total, 12))) % 360; }
+
+    function SnakeGame({ onBack }) {
+      const IS = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+      const IF = {x:15,y:10};
+
+      const [snake,     setSnake]     = useState(IS);
+      const [food,      setFood]      = useState(IF);
+      const [score,     setScore]     = useState(0);
+      const [gameOver,  setGameOver]  = useState(false);
+      const [started,   setStarted]   = useState(false);
+      const [tickMs,    setTickMs]    = useState(270);
+      const [pearlCount,setPearlCount]= useState(0);
+      const [pulse,     setPulse]     = useState(0);
+
+      const canvasRef   = useRef(null);
+      const snakeRef    = useRef(IS);
+      const foodRef     = useRef(IF);
+      const dirRef      = useRef({x:1,y:0});
+      const scoreRef    = useRef(0);
+      const prlCntRef   = useRef(0);
+      const goRef       = useRef(false);
+
+      // Pulse pour la perle à attraper
+      useEffect(() => {
+        const t = setInterval(() => setPulse(p => p + 1), 50);
+        return () => clearInterval(t);
+      }, []);
+
+      // Dessin canvas — collier de perles
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const cs = SN_CS / SN_COLS;
+
+        // Fond
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, SN_CS, SN_CS);
+
+        // Grille discrète
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 0.5;
+        for (let i=0; i<=SN_COLS; i++) {
+          ctx.beginPath(); ctx.moveTo(i*cs,0); ctx.lineTo(i*cs,SN_CS); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0,i*cs); ctx.lineTo(SN_CS,i*cs); ctx.stroke();
+        }
+
+        const total = snake.length;
+
+        // Fil du collier (dessiné avant les perles)
+        if (total > 1) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(220,200,255,0.25)';
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = 'round';
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          snake.forEach((seg, idx) => {
+            const cx = seg.x*cs + cs/2, cy = seg.y*cs + cs/2;
+            idx === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // Perle à attraper — dorée et pulsante
+        const f = food;
+        const pulseFactor = 0.85 + 0.15 * Math.sin(pulse * 0.35);
+        const fR = (cs/2 - 1) * pulseFactor;
+        const fx = f.x*cs + cs/2, fy = f.y*cs + cs/2;
+        ctx.save();
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur  = 10 + 14 * Math.abs(Math.sin(pulse * 0.35));
+        const fGrad = ctx.createRadialGradient(fx - fR*0.35, fy - fR*0.35, 0, fx, fy, fR);
+        fGrad.addColorStop(0,   '#fff8e0');
+        fGrad.addColorStop(0.35,'#ffd700');
+        fGrad.addColorStop(0.75,'#ffaa00');
+        fGrad.addColorStop(1,   '#cc6600');
+        ctx.fillStyle = fGrad;
+        ctx.beginPath(); ctx.arc(fx, fy, fR, 0, Math.PI*2); ctx.fill();
+        // reflet
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.beginPath(); ctx.arc(fx - fR*0.32, fy - fR*0.32, fR*0.2, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        // Perles du collier
+        snake.forEach((seg, idx) => {
+          const cx = seg.x*cs + cs/2, cy = seg.y*cs + cs/2;
+          const isHead = idx === 0;
+          const r = isHead ? cs/2 - 1 : cs/2 - 2.5;
+          const hue = pearlHue(idx, total);
+
+          ctx.save();
+          ctx.shadowColor = `hsl(${hue},100%,65%)`;
+          ctx.shadowBlur  = isHead ? 22 : 9;
+
+          const grad = ctx.createRadialGradient(cx - r*0.35, cy - r*0.35, 0, cx, cy, r);
+          grad.addColorStop(0,   `hsl(${hue},60%,90%)`);
+          grad.addColorStop(0.45,`hsl(${hue},100%,65%)`);
+          grad.addColorStop(0.8, `hsl(${hue},100%,40%)`);
+          grad.addColorStop(1,   `hsl(${hue},100%,22%)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+
+          // reflet principal
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.beginPath(); ctx.arc(cx - r*0.32, cy - r*0.33, r*(isHead?0.22:0.18), 0, Math.PI*2); ctx.fill();
+
+          // petit reflet secondaire
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          ctx.beginPath(); ctx.arc(cx + r*0.28, cy + r*0.28, r*0.1, 0, Math.PI*2); ctx.fill();
+
+          // contour léger
+          ctx.strokeStyle = `hsla(${hue},100%,80%,0.35)`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+
+          ctx.restore();
+        });
+      }, [snake, food, pulse]);
+
+      function spawnFood(snk) {
+        let pos;
+        do { pos = { x:Math.floor(Math.random()*SN_COLS), y:Math.floor(Math.random()*SN_ROWS) }; }
+        while (snk.some(s => s.x===pos.x && s.y===pos.y));
+        return pos;
+      }
+
+      function changeDir(dx, dy) {
+        if (dx!==0 && dirRef.current.x!==0) return;
+        if (dy!==0 && dirRef.current.y!==0) return;
+        dirRef.current = {x:dx, y:dy};
+      }
+
+      useEffect(() => {
+        const h = e => {
+          const m = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0] };
+          if (m[e.key]) { e.preventDefault(); changeDir(...m[e.key]); }
+        };
+        window.addEventListener('keydown', h);
+        return () => window.removeEventListener('keydown', h);
+      }, []);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const t = setInterval(() => {
+          if (goRef.current) return;
+          const snk = snakeRef.current;
+          const d   = dirRef.current;
+          const head = { x:(snk[0].x+d.x+SN_COLS)%SN_COLS, y:(snk[0].y+d.y+SN_ROWS)%SN_ROWS };
+
+          if (snk.some(s => s.x===head.x && s.y===head.y)) {
+            goRef.current = true; setGameOver(true); playDie(); return;
+          }
+
+          const f = foodRef.current;
+          let ns;
+          if (head.x===f.x && head.y===f.y) {
+            ns = [head, ...snk];
+            const newSc = scoreRef.current + 10;
+            const newPc = prlCntRef.current + 1;
+            scoreRef.current = newSc; prlCntRef.current = newPc;
+            setScore(newSc); setPearlCount(newPc);
+            const nf = spawnFood(ns); foodRef.current = nf; setFood(nf);
+            if (newPc % 3 === 0) setTickMs(prev => Math.max(100, prev-20));
+            playEat();
+          } else {
+            ns = [head, ...snk.slice(0,-1)];
+          }
+          snakeRef.current = ns;
+          setSnake([...ns]);
+        }, tickMs);
+        return () => clearInterval(t);
+      }, [started, gameOver, tickMs]);
+
+      function restart() {
+        snakeRef.current = IS; foodRef.current = IF;
+        dirRef.current = {x:1,y:0}; scoreRef.current = 0;
+        prlCntRef.current = 0; goRef.current = false;
+        setSnake([...IS]); setFood({...IF}); setScore(0); setPearlCount(0);
+        setGameOver(false); setTickMs(270); setStarted(true);
+      }
+
+      const dBtn = {
+        height:'72px', width:'100%',
+        background:'rgba(255,136,255,0.10)', border:'2px solid rgba(255,136,255,0.22)',
+        borderRadius:'14px', color:'#ff88ff', fontSize:'1.9rem'
+      };
+
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
+             style={{ background:'radial-gradient(ellipse at 50% 0%,#1a0030 0%,#050510 60%)', position:'relative' }}>
+          <div className="blob" style={{ width:200,height:200,background:'#ff00ff',top:-80,right:-60 }}/>
+          <div className="blob" style={{ width:160,height:160,background:'#0088ff',bottom:120,left:-50,animationDelay:'3s' }}/>
+          <div className="blob" style={{ width:120,height:120,background:'#ffd700',top:'40%',left:'60%',animationDelay:'6s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-3 z-10">
+            <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>
+              ← MENU
+            </button>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontFamily:'Orbitron,sans-serif', color:'#ff88ff', textShadow:'0 0 12px #ff00ff', fontSize:'1.8rem', fontWeight:900, lineHeight:1 }}>{score}</div>
+              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.56rem', color:'#555', letterSpacing:'.1em' }}>💎 {pearlCount} perle{pearlCount!==1?'s':''}</div>
+            </div>
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl z-10" style={{ position:'relative' }}>
+            <canvas ref={canvasRef} width={SN_CS} height={SN_CS}
+                    style={{ width:'100%', aspectRatio:'1', borderRadius:'16px', display:'block', border:'1px solid rgba(255,136,255,0.15)', boxShadow:'0 0 40px rgba(255,0,255,.1),0 20px 60px rgba(0,0,0,.8)' }}/>
+
+            {!started && !gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl"
+                   style={{ background:'rgba(4,4,14,.92)', backdropFilter:'blur(6px)' }}>
+                <p className="text-5xl mb-3" style={{ filter:'drop-shadow(0 0 20px #ff88ff)' }}>📿</p>
+                <h2 style={{ fontFamily:'Orbitron,sans-serif', color:'#ff88ff', textShadow:'0 0 20px #ff00ff', fontSize:'1.8rem', fontWeight:900, marginBottom:'.4rem', letterSpacing:'.08em' }}>COLLIER DE PERLES</h2>
+                <p className="text-slate-400 text-center text-sm mb-5 px-8 leading-relaxed">
+                  Guide le collier pour attraper<br/>les perles dorées ✨
+                </p>
+                <button onClick={restart}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#ff44aa,#aa00ff)', boxShadow:'0 0 30px #ff00ff,0 0 60px #ff00ff40', fontFamily:'Orbitron,sans-serif' }}>
+                  JOUER ▶
+                </button>
+              </div>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl"
+                   style={{ background:'rgba(4,4,14,.92)', backdropFilter:'blur(6px)' }}>
+                <p className="text-4xl mb-2">💔</p>
+                <h2 style={{ fontFamily:'Orbitron,sans-serif', color:'#ff3366', textShadow:'0 0 20px #ff3366', fontSize:'2rem', fontWeight:900, marginBottom:'.2rem' }}>CASSÉ !</h2>
+                <p style={{ fontFamily:'Orbitron,sans-serif', color:'#ff88ff', fontSize:'2.2rem', fontWeight:900, marginBottom:'.2rem' }}>{score}</p>
+                <p style={{ fontFamily:'Orbitron,sans-serif', color:'#555', fontSize:'.62rem', letterSpacing:'.1em', marginBottom:'1.4rem' }}>💎 PERLES : {pearlCount}</p>
+                <button onClick={restart}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#ff44aa,#aa00ff)', boxShadow:'0 0 30px #ff00ff', fontFamily:'Orbitron,sans-serif' }}>
+                  REJOUER ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 z-10" style={{ display:'grid', gridTemplateColumns:'repeat(3,76px)', gridTemplateRows:'repeat(3,76px)', gap:'6px' }}>
+            <div/>
+            <button className="dpad-btn" onPointerDown={() => changeDir(0,-1)} onMouseDown={() => changeDir(0,-1)} onTouchStart={(e) => { e.preventDefault(); changeDir(0,-1); }} style={dBtn}>▲</button>
+            <div/>
+            <button className="dpad-btn" onPointerDown={() => changeDir(-1,0)} onMouseDown={() => changeDir(-1,0)} onTouchStart={(e) => { e.preventDefault(); changeDir(-1,0); }} style={dBtn}>◀</button>
+            <div style={{ ...dBtn, background:'rgba(255,136,255,0.03)', border:'2px solid rgba(255,136,255,0.07)', cursor:'default' }}/>
+            <button className="dpad-btn" onPointerDown={() => changeDir(1,0)} onMouseDown={() => changeDir(1,0)} onTouchStart={(e) => { e.preventDefault(); changeDir(1,0); }}  style={dBtn}>▶</button>
+            <div/>
+            <button className="dpad-btn" onPointerDown={() => changeDir(0,1)} onMouseDown={() => changeDir(0,1)} onTouchStart={(e) => { e.preventDefault(); changeDir(0,1); }}  style={dBtn}>▼</button>
+            <div/>
+          </div>
+        </div>
+      );
+    }
+
+    function DogGame({ onBack }) {
+      const [started, setStarted] = useState(false);
+      const [gameOver, setGameOver] = useState(false);
+      const [score, setScore] = useState(0);
+      const [lives, setLives] = useState(3);
+      const [speed, setSpeed] = useState(1);
+      const [playerY, setPlayerY] = useState(0);
+      const [message, setMessage] = useState('Appuie sur SAUTER pour esquiver les obstacles.');
+      const [obstacles, setObstacles] = useState([]);
+      const [bones, setBones] = useState(0);
+      const [jumping, setJumping] = useState(false);
+      const [jumpCount, setJumpCount] = useState(0);
+
+      const obsRef = useRef([]);
+      const playerYRef = useRef(0);
+      const velRef = useRef(0);
+      const speedRef = useRef(1);
+      const livesRef = useRef(3);
+      const jumpCountRef = useRef(0);
+
+      useEffect(() => { obsRef.current = obstacles; }, [obstacles]);
+      useEffect(() => { speedRef.current = speed; }, [speed]);
+      useEffect(() => { livesRef.current = lives; }, [lives]);
+      useEffect(() => { jumpCountRef.current = jumpCount; }, [jumpCount]);
+
+      function addMessage(text) {
+        setMessage(text);
+        setTimeout(() => { setMessage(''); }, 1400);
+      }
+
+      function start() {
+        obsRef.current = [];
+        playerYRef.current = 0;
+        velRef.current = 0;
+        livesRef.current = 3;
+        setObstacles([]);
+        setScore(0);
+        setLives(3);
+        setSpeed(1);
+        setPlayerY(0);
+        setBones(0);
+        setJumping(false);
+        setJumpCount(0);
+        jumpCountRef.current = 0;
+        setMessage('Appuie sur SAUTER pour esquiver les obstacles.');
+        setGameOver(false);
+        setStarted(true);
+      }
+
+      function jump() {
+        if (!started || gameOver || jumpCountRef.current >= 2) return;
+        velRef.current = 0.45;
+        setJumping(true);
+        setJumpCount(c => Math.min(2, c + 1));
+      }
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const t = setInterval(() => {
+          let y = playerYRef.current;
+          let v = velRef.current;
+          v -= 0.027;
+          y += v;
+          if (y <= 0) {
+            y = 0;
+            v = 0;
+            if (jumping) setJumping(false);
+            if (jumpCountRef.current !== 0) {
+              setJumpCount(0);
+              jumpCountRef.current = 0;
+            }
+          }
+          playerYRef.current = y;
+          velRef.current = v;
+          setPlayerY(y);
+
+          const next = [];
+          const dogJump = y > 0.28;
+          obsRef.current.forEach(o => {
+            const nextX = o.x - (1.8 + speedRef.current * 0.28);
+            if (nextX < -18) return;
+            const inHitZone = nextX < 18 && nextX > 12;
+            if (inHitZone) {
+              if (o.type === 'rock') {
+                if (!dogJump) {
+                  setLives(l => Math.max(0, l - 1));
+                  playMiss();
+                  addMessage('Oups ! Obstacle touché.');
+                  if (livesRef.current <= 1) {
+                    setGameOver(true);
+                    playDie();
+                  }
+                }
+                return;
+              }
+              if (o.type === 'bone' && dogJump) {
+                setScore(s => s + 34);
+                setBones(b => b + 1);
+                playEat();
+                addMessage("Os récupéré ! Pas de vie gagnée.");
+                return;
+              }
+              if (o.type === 'cursed' && dogJump) {
+                setScore(s => s + 12);
+                setSpeed(s => Math.min(2.8, s + 0.35));
+                playMiss();
+                addMessage('Os maudit ! Vitesse accélère');
+                return;
+              }
+            }
+            next.push({ ...o, x: nextX });
+          });
+          obsRef.current = next;
+          setObstacles(next);
+        }, 30);
+        return () => clearInterval(t);
+      }, [started, gameOver, jumping]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const sp = setInterval(() => {
+          const roll = Math.random();
+          const kind = roll < 0.14 ? 'cursed' : roll < 0.55 ? 'bone' : 'rock';
+          const id = randomId();
+          setObstacles(prev => {
+            const next = [...prev, { id, x: 106, type: kind, y: kind === 'rock' ? 0 : 1 }];
+            if (Math.random() < 0.28) {
+              const roll2 = Math.random();
+              const kind2 = roll2 < 0.14 ? 'cursed' : roll2 < 0.55 ? 'bone' : 'rock';
+              next.push({ id: randomId(), x: 110, type: kind2, y: kind2 === 'rock' ? 0 : 1 });
+            }
+            return next;
+          });
+        }, Math.max(720, 1250 - speed * 250));
+        return () => clearInterval(sp);
+      }, [started, gameOver, speed]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const accel = setInterval(() => setSpeed(s => Math.min(2.8, s + 0.06)), 4600);
+        return () => clearInterval(accel);
+      }, [started, gameOver]);
+
+      const speedLabel = speed > 2.2 ? 'TRÈS RAPIDE' : speed > 1.6 ? 'RAPIDE' : 'NORMAL';
+      const speedColor = speed > 2.2 ? '#ff3333' : speed > 1.6 ? '#ff8800' : '#00ff88';
+
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
+             style={{ background:'radial-gradient(ellipse at 50% 10%,#140018 0%,#050510 58%)', position:'relative' }}>
+          <div className="blob" style={{ width:220,height:220,background:'#ffd700',top:-60,left:-50 }}/>
+          <div className="blob" style={{ width:180,height:180,background:'#ff7700',bottom:90,right:-40,animationDelay:'3.8s' }}/>
+          <div className="blob" style={{ width:120,height:120,background:'#ff33aa',top:'42%',left:'30%',animationDelay:'6.2s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-start justify-between mb-3 z-10">
+            <div>
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer', marginBottom:'4px' }}>
+                ← MENU
+              </button>
+              <h1 className="neon-title text-2xl font-black tracking-widest leading-tight">DOG RUN</h1>
+              <div className="flex items-center gap-1 mt-1.5">
+                {[0,1,2].map(i => (
+                  <span key={i} className="text-lg" style={{ opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="score-text text-3xl font-black">{score}</p>
+              <div style={{ minHeight:'1.2em', fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', fontWeight:900, letterSpacing:'.05em', color:speedColor }}>{speedLabel}</div>
+            </div>
+          </div>
+
+          <div className="relative w-full max-w-full lg:max-w-3xl rounded-3xl overflow-hidden z-10"
+               style={{ height:'56vh', minHeight:'360px', background:'#07070f', border:'1px solid rgba(255,255,255,0.07)', boxShadow:'0 0 50px rgba(255,180,20,.07),0 20px 60px rgba(0,0,0,.8)' }}>
+            <div className="scanlines absolute inset-0 z-10"/>
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#030205] to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-[#12121f]" style={{ boxShadow:'0 -2px 18px rgba(0,0,0,0.45)' }}/>
+            <div className="absolute inset-x-0 bottom-20 h-1 bg-[#414157] opacity-80" />
+            <div style={{ position:'absolute', left:'18%', bottom:`calc(12% + ${playerY * 32}px)`, width:'80px', height:'80px', borderRadius:'26px', background:'#111', border:'2px solid rgba(255,255,255,0.1)', boxShadow:'0 0 18px rgba(255,255,255,0.08)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', color:'#ffd700', zIndex:20 }}>
+              🤖
+            </div>
+
+            {obstacles.map(o => (
+              <div key={o.id} className="absolute" style={{ left:`${o.x}%`, bottom:o.y === 0 ? '16%' : '42%', width:'48px', height:'48px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'18px', background:o.type === 'rock' ? 'rgba(80,80,90,.95)' : o.type === 'bone' ? 'rgba(255,235,170,.95)' : 'rgba(255,100,100,.95)', boxShadow:o.type === 'cursed' ? '0 0 18px rgba(255,80,80,.8)' : '0 0 14px rgba(255,255,255,.12)' }}>
+                <span style={{ fontSize:'1.6rem' }}>{o.type === 'rock' ? '🪨' : o.type === 'bone' ? '🦴' : '☠️'}</span>
+              </div>
+            ))}
+
+            {!started && !gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20"
+                   style={{ background:'rgba(4,4,14,.92)', backdropFilter:'blur(6px)' }}>
+                <p className="text-5xl mb-3" style={{ filter:'drop-shadow(0 0 20px #ffd700)' }}>🐶</p>
+                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">CHIEN ROBOT</h2>
+                <p className="text-slate-400 text-center text-sm mb-5 px-8 leading-relaxed">
+                  Saute les obstacles et attrape les os.
+                  Les os maudits te font accélérer !
+                </p>
+                <button onClick={start}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#ffd700,#ff7700)', boxShadow:'0 0 30px #ffd700,0 0 60px #ff770040', fontFamily:'Orbitron,sans-serif' }}>
+                  JOUER ▶
+                </button>
+              </div>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20"
+                   style={{ background:'rgba(4,4,14,.92)', backdropFilter:'blur(6px)' }}>
+                <p className="text-4xl mb-2">💥</p>
+                <h2 className="font-black mb-1" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#ff6600', textShadow:'0 0 20px #ff6600' }}>GAME OVER</h2>
+                <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
+                <p className="text-slate-500 mb-5" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', letterSpacing:'.08em' }}>OS : {bones}</p>
+                <button onClick={start}
+                        className="rounded-full px-10 py-4 text-xl font-black text-black"
+                        style={{ background:'linear-gradient(135deg,#ffd700,#ff6600)', boxShadow:'0 0 30px #ffd700,0 0 60px #ffd70040', fontFamily:'Orbitron,sans-serif' }}>
+                  REJOUER ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-3 mb-1 z-10">
+            <div className="flex justify-between mb-2" style={{ fontSize:'.62rem', fontFamily:'Orbitron,sans-serif', letterSpacing:'.08em' }}>
+              <span className="text-slate-600">OS</span>
+              <span style={{ color:'#ffd700' }}>{bones}</span>
+            </div>
+            <div className="flex justify-between mb-1" style={{ fontSize:'.62rem', fontFamily:'Orbitron,sans-serif', letterSpacing:'.08em' }}>
+              <span className="text-slate-600">STATUT</span>
+              <span style={{ color:speedColor }}>{speedLabel}</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background:'rgba(255,255,255,0.07)' }}>
+              <div className="speed-fill h-full rounded-full" style={{ width:`${Math.min(100, Math.round((speed - 1) / 1.8 * 100))}%`, background:`linear-gradient(90deg,${speedColor}88,${speedColor})` }}/>
+            </div>
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-4 z-10 flex flex-col items-center gap-3">
+            <button onPointerDown={jump} onMouseDown={jump} onTouchStart={(e) => { e.preventDefault(); jump(); }}
+                    className="rounded-full px-10 py-4 text-xl font-black text-white"
+                    style={{ width:'100%', background:'linear-gradient(135deg,#ffdd55,#ff9933)', boxShadow:'0 0 30px #ffd700,0 0 60px #ff9900', fontFamily:'Orbitron,sans-serif', letterSpacing:'.08em' }}>
+              SAUTER
+            </button>
+            <div className="text-slate-300 text-sm" style={{ fontFamily:'Orbitron,sans-serif', minHeight:'1.2rem' }}>{message}</div>
+          </div>
+        </div>
+      );
+    }
+
+    function CandyGame({ onBack }) {
+      const [started, setStarted] = useState(false);
+      const [score, setScore] = useState(0);
+      const [lives, setLives] = useState(3);
+      const [gameOver, setGameOver] = useState(false);
+      const [position, setPosition] = useState(50);
+      const [obstacles, setObstacles] = useState([]);
+      const [message, setMessage] = useState("Glisse le bonbon avec le doigt, évite les enfants affamés !");
+      const [active, setActive] = useState(false);
+
+      const areaRef = useRef(null);
+      const posRef = useRef(50);
+      const scoreRef = useRef(0);
+      const livesRef = useRef(3);
+      const activeRef = useRef(false);
+
+      useEffect(() => { posRef.current = position; }, [position]);
+      useEffect(() => { scoreRef.current = score; }, [score]);
+      useEffect(() => { livesRef.current = lives; }, [lives]);
+      useEffect(() => { activeRef.current = active; }, [active]);
+
+      function reset() {
+        setStarted(true);
+        setGameOver(false);
+        setScore(0);
+        setLives(3);
+        setPosition(50);
+        posRef.current = 50;
+        setObstacles([]);
+        setMessage("Glisse le bonbon avec le doigt, évite les enfants affamés !");
+      }
+
+      function setX(clientX) {
+        const rect = areaRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const percent = Math.min(94, Math.max(6, ((clientX - rect.left) / rect.width) * 100));
+        setPosition(percent);
+      }
+
+      function handleMove(e) {
+        if (!activeRef.current) return;
+        setX(e.clientX || (e.touches && e.touches[0]?.clientX));
+      }
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const interval = setInterval(() => {
+          setScore(prev => prev + 1);
+        }, 220);
+        return () => clearInterval(interval);
+      }, [started, gameOver]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const move = setInterval(() => {
+          setObstacles(prev => {
+            const next = [];
+            prev.forEach(o => {
+              const speed = 1.1 + scoreRef.current * 0.012;
+              const y = o.y + speed;
+              if (y > 100) return;
+              const hit = y > 84 && Math.abs(o.x - posRef.current) < 12;
+              if (hit) {
+                const newLives = Math.max(0, livesRef.current - 1);
+                setLives(newLives);
+                if (newLives <= 0) {
+                  setGameOver(true);
+                }
+                return;
+              }
+              next.push({ ...o, y });
+            });
+            return next;
+          });
+        }, 24);
+        return () => clearInterval(move);
+      }, [started, gameOver]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const spawn = setInterval(() => {
+          const id = randomId();
+          const x = 10 + Math.random() * 80;
+          setObstacles(prev => [...prev, { id, x, y: -6, type: Math.random() < 0.4 ? 'big' : 'small' }]);
+        }, Math.max(420, 950 - scoreRef.current * 8));
+        return () => clearInterval(spawn);
+      }, [started, gameOver]);
+
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
+             style={{ background:'radial-gradient(circle at 50% 20%,#f0b8ff 0%,#120623 58%)', position:'relative' }}>
+          <div className="blob" style={{ width:200,height:200,background:'#ff88ff',top:-70,left:-40 }}/>
+          <div className="blob" style={{ width:160,height:160,background:'#38d4ff',bottom:100,right:-50,animationDelay:'3.8s' }}/>
+          <div className="blob" style={{ width:140,height:140,background:'#ffe56a',top:'40%',left:'65%',animationDelay:'5.9s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-start justify-between mb-3 z-10">
+            <div>
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer', marginBottom:'4px' }}>
+                ← MENU
+              </button>
+              <h1 className="neon-title text-2xl font-black tracking-widest leading-tight">CANDY DASH</h1>
+              <div className="flex items-center gap-1 mt-1.5">
+                {[0,1,2].map(i => (
+                  <span key={i} className="text-lg" style={{ opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff7799)':'none', transition:'opacity .3s' }}>🍭</span>
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="score-text text-3xl font-black">{score}</p>
+              <div style={{ minHeight:'1.2em', fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', fontWeight:900, letterSpacing:'.05em', color:'#38d4ff' }}>Résiste le plus longtemps possible</div>
+            </div>
+          </div>
+
+          <div ref={areaRef}
+               className="relative w-full max-w-full lg:max-w-3xl rounded-3xl overflow-hidden z-10"
+               style={{ height:'55vh', minHeight:'360px', background:'linear-gradient(180deg,#ffe7ff 0%,#7a4b93 65%,#120623 100%)', border:'1px solid rgba(255,255,255,0.07)', boxShadow:'0 0 50px rgba(255,255,255,.08),0 20px 60px rgba(0,0,0,.65)' }}
+               onPointerDown={(e) => { setActive(true); setX(e.clientX); }}
+               onPointerMove={handleMove}
+               onPointerUp={() => setActive(false)}
+               onPointerLeave={() => setActive(false)}
+               onTouchStart={(e) => { setActive(true); setX(e.touches[0]?.clientX); }}
+               onTouchMove={(e) => { handleMove(e); }}
+               onTouchEnd={() => setActive(false)}>
+            <div className="absolute left-0 right-0 top-0 h-20" style={{ background:'radial-gradient(circle at 50% 20%,rgba(255,255,255,0.22),transparent 70%)' }}/>
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-[#47194a] opacity-90" />
+            <div className="absolute inset-x-0 bottom-20 h-1 bg-[#ffd2ff] opacity-40" />
+
+            <div style={{ position:'absolute', left:`calc(${position}% - 28px)`, bottom:'16%', width:'56px', height:'56px', borderRadius:'24px', background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', boxShadow:'0 0 30px rgba(255,255,255,0.45)' }}>
+              🍬
+            </div>
+
+            {obstacles.map(o => (
+              <div key={o.id} className="absolute" style={{ left:`${o.x}%`, top:`${o.y}%`, width:'44px', height:'44px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'16px', background:o.type === 'child' ? 'rgba(255,255,255,0.9)' : 'rgba(255,200,80,0.95)', boxShadow:o.type === 'child' ? '0 0 16px rgba(255,255,255,0.6)' : '0 0 16px rgba(255,180,0,0.6)' }}>
+                <span style={{ fontSize:'1.7rem' }}>{o.type === 'big' ? '🧒' : '👧'}</span>
+              </div>
+            ))}
+
+            {!started && !gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(18,3,33,.88)', backdropFilter:'blur(4px)' }}>
+                <p className="text-5xl mb-3">🍬</p>
+                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">BONBON EN FUITE</h2>
+                <p className="text-slate-300 text-center text-sm mb-5 px-8 leading-relaxed">
+                  Glisse avec ton doigt et évite les enfants affamés.
+                  Plus tu résistes, plus ils sont nombreux.
+                </p>
+                <button onClick={reset}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#38d4ff,#7f5cff)', boxShadow:'0 0 30px #38d4ff,0 0 60px #7f5cff', fontFamily:'Orbitron,sans-serif' }}>
+                  JOUER ▶
+                </button>
+              </div>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(18,3,33,.92)', backdropFilter:'blur(4px)' }}>
+                <p className="text-5xl mb-3">😵</p>
+                <h2 className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>TU AS ÉTÉ ATTRAPÉ</h2>
+                <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
+                <p className="text-slate-400 mb-6" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.68rem', letterSpacing:'.08em' }}>Retourne au menu ou recommence.</p>
+                <button onClick={reset}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#38d4ff,#7f5cff)', boxShadow:'0 0 30px #38d4ff,0 0 60px #7f5cff', fontFamily:'Orbitron,sans-serif' }}>
+                  REJOUER ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-4 z-10 text-slate-200" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.75rem', letterSpacing:'.08em' }}>
+            {message}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Pirate Fire ─────────────────────────────────────────────────────────
+    function PirateGame({ onBack }) {
+      const [started, setStarted] = useState(false);
+      const [gameOver, setGameOver] = useState(false);
+      const [score, setScore] = useState(0);
+      const [lives, setLives] = useState(3);
+      const [shipX, setShipX] = useState(50);
+      const [missiles, setMissiles] = useState([]);
+      const [enemies, setEnemies] = useState([]);
+      const [power, setPower] = useState(false);
+      const [powerTimer, setPowerTimer] = useState(0);
+      const [message, setMessage] = useState('Tire des boulets, protège ton navire et prends le double canon.');
+
+      const shipXRef = useRef(50);
+      const livesRef = useRef(3);
+      const scoreRef = useRef(0);
+      const powerRef = useRef(false);
+      const gameAreaRef = useRef(null);
+      const missilesRef = useRef([]);
+      const movingLeftRef = useRef(false);
+      const movingRightRef = useRef(false);
+
+      useEffect(() => { shipXRef.current = shipX; }, [shipX]);
+      useEffect(() => { livesRef.current = lives; }, [lives]);
+      useEffect(() => { scoreRef.current = score; }, [score]);
+      useEffect(() => { powerRef.current = power; }, [power]);
+      useEffect(() => { missilesRef.current = missiles; }, [missiles]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const moveInterval = setInterval(() => {
+          if (movingLeftRef.current) {
+            setShipX(x => { const nx = Math.max(6, x - 2.5); shipXRef.current = nx; return nx; });
+          }
+          if (movingRightRef.current) {
+            setShipX(x => { const nx = Math.min(94, x + 2.5); shipXRef.current = nx; return nx; });
+          }
+        }, 16);
+        return () => clearInterval(moveInterval);
+      }, [started, gameOver]);
+
+      function reset() {
+        setStarted(true);
+        setGameOver(false);
+        setScore(0);
+        setLives(3);
+        setShipX(50);
+        setMissiles([]);
+        setEnemies([]);
+        setPower(false);
+        setPowerTimer(0);
+        setMessage('Tire des boulets, protège ton navire et prends le double canon.');
+      }
+
+      function fire() {
+        if (!started || gameOver) return;
+        const center = shipXRef.current;
+        const base = { id: randomId(), x: center, y: 86 };
+        const shots = [{ ...base }];
+        if (powerRef.current) {
+          shots.push({ id: randomId(), x: center - 6, y: 86 });
+          shots.push({ id: randomId(), x: center + 6, y: 86 });
+        }
+        setMissiles(prev => [...prev, ...shots]);
+      }
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const step = setInterval(() => {
+          setMissiles(prev => prev
+            .map(m => ({ ...m, y: m.y - 4.5 }))
+            .filter(m => m.y > -6)
+          );
+          setEnemies(prev => {
+            const next = [];
+            prev.forEach(enemy => {
+              const speed = 0.85 + scoreRef.current * 0.012;
+              const newY = enemy.y + speed;
+              const hitByMissile = missilesRef.current.some(m => Math.abs(m.x - enemy.x) < 12 && Math.abs(m.y - newY) < 11);
+              if (hitByMissile) {
+                setScore(s => s + (enemy.type === 'power' ? 18 : 16));
+                if (enemy.type === 'power') {
+                  setPower(true);
+                  setPowerTimer(300);
+                  setMessage('Double canon activé !');
+                }
+                return;
+              }
+              if (newY > 94) {
+                setLives(l => {
+                  const nextLives = Math.max(0, l - 1);
+                  if (nextLives <= 0) setGameOver(true);
+                  return nextLives;
+                });
+                return;
+              }
+              if (enemy.type !== 'power' && newY > 70 && Math.abs(enemy.x - shipXRef.current) < 9) {
+                setLives(l => {
+                  const nextLives = Math.max(0, l - 1);
+                  if (nextLives <= 0) setGameOver(true);
+                  return nextLives;
+                });
+                return;
+              }
+              next.push({ ...enemy, y: newY });
+            });
+            return next;
+          });
+        }, 22);
+        return () => clearInterval(step);
+      }, [started, gameOver]);
+
+      useEffect(() => {
+        if (!started || gameOver) return;
+        const spawn = setInterval(() => {
+          const roll = Math.random();
+          const id = randomId();
+          if (roll < 0.16) {
+            setEnemies(prev => [...prev, { id, x: 12 + Math.random() * 76, y: -10, type: 'power' }]);
+          } else {
+            setEnemies(prev => [...prev, { id, x: 10 + Math.random() * 80, y: -12, type: 'boat' }]);
+          }
+        }, Math.max(550, 1000 - scoreRef.current * 6));
+        return () => clearInterval(spawn);
+      }, [started, gameOver]);
+
+      useEffect(() => {
+        if (!power || gameOver) return;
+        const timer = setInterval(() => {
+          setPowerTimer(prev => {
+            if (prev <= 1) {
+              setPower(false);
+              setMessage('Canon simple');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 220);
+        return () => clearInterval(timer);
+      }, [power, gameOver]);
+
+      return (
+        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
+             style={{ height:'100dvh', background:'radial-gradient(circle at 20% 15%,#74d4ff 0%,#04182d 70%)', position:'relative' }}>
+          <div className="blob" style={{ width:220,height:220,background:'#33b6ff',top:-60,left:-50 }}/>
+          <div className="blob" style={{ width:180,height:180,background:'#ffd700',bottom:100,right:-45,animationDelay:'3.5s' }}/>
+          <div className="blob" style={{ width:130,height:130,background:'#ff8c4f',top:'40%',left:'60%',animationDelay:'6s' }}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{ flexShrink:0 }}>
+            <div className="flex items-center gap-3">
+              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', letterSpacing:'.05em', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>
+                ← MENU
+              </button>
+              <div>
+                <h1 className="font-black tracking-widest leading-tight" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.1rem', color:'#22d3ee', textShadow:'0 0 10px #22d3ee,0 0 22px #22d3ee60' }}>PIRATE FIRE</h1>
+                <div className="flex items-center gap-1 mt-0.5">
+                  {[0,1,2].map(i => (
+                    <span key={i} style={{ fontSize:'.95rem', opacity:i<lives?1:.15, filter:i<lives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="score-text font-black" style={{ fontSize:'1.6rem', lineHeight:1 }}>{score}</p>
+              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.6rem', fontWeight:900, letterSpacing:'.05em', color:'#22d3ee' }}>{power ? '⚡ Double canon' : 'Canon simple'}</div>
+            </div>
+          </div>
+
+          <div ref={gameAreaRef} className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10"
+               style={{ flex:1, minHeight:0, background:'linear-gradient(180deg,#80dfff 0%,#0b1f36 80%)', border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 0 50px rgba(0,0,0,.25),0 20px 60px rgba(0,0,0,.7)' }}>
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#04223f] to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/15 to-transparent" />
+            <div className="absolute inset-x-0 top-14 h-1 bg-white/30" />
+            <div className="absolute inset-x-0 bottom-12 h-1 bg-white/20" />
+            <div className="absolute inset-x-0 bottom-23 h-2 bg-white/15" />
+
+            {enemies.map(enemy => (
+              <div key={enemy.id} className="absolute" style={{ left:`${enemy.x}%`, top:`${enemy.y}%`, width:'42px', height:'42px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'14px', background: enemy.type === 'power' ? 'rgba(255,215,90,0.95)' : 'rgba(30,30,50,0.95)', boxShadow: enemy.type === 'power' ? '0 0 18px rgba(255,215,90,0.7)' : '0 0 14px rgba(0,0,0,0.4)' }}>
+                <span style={{ fontSize:'1.7rem' }}>{enemy.type === 'power' ? '⚡' : '🚢'}</span>
+              </div>
+            ))}
+
+            {missiles.map(missile => (
+              <div key={missile.id} className="absolute" style={{ left:`${missile.x}%`, top:`${missile.y}%`, width:'8px', height:'16px', background:'#fffbeb', borderRadius:'4px', boxShadow:'0 0 14px rgba(255,255,255,0.7)' }} />
+            ))}
+
+            <div style={{ position:'absolute', left:`calc(${shipX}% - 24px)`, bottom:'10%', width:'48px', height:'48px', borderRadius:'14px', background:'#0f172a', border:'2px solid rgba(255,255,255,0.12)', boxShadow:'0 0 22px rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', color:'#f8fafc' }}>
+              🚢
+            </div>
+
+            {!started && !gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(3,10,30,.92)', backdropFilter:'blur(4px)' }}>
+                <p className="text-5xl mb-3">🏴‍☠️</p>
+                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">BATAILLE PIRATE</h2>
+                <p className="text-slate-300 text-center text-sm mb-5 px-8 leading-relaxed">
+                  Touche les autres bateaux avec tes missiles.
+                  Ramasse un coffre pour activer le double canon.
+                </p>
+                <button onClick={reset}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee,0 0 60px #0ea5e9', fontFamily:'Orbitron,sans-serif' }}>
+                  JOUER ▶
+                </button>
+              </div>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(3,10,30,.94)', backdropFilter:'blur(4px)' }}>
+                <p className="text-4xl mb-3">💥</p>
+                <h2 className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:'#38d4ff', textShadow:'0 0 20px #38d4ff' }}>NAVIRE COULÉ</h2>
+                <p className="score-text font-black mb-1" style={{ fontSize:'2.4rem' }}>{score}</p>
+                <button onClick={reset}
+                        className="rounded-full px-10 py-4 text-xl font-black text-white"
+                        style={{ background:'linear-gradient(135deg,#22d3ee,#0ea5e9)', boxShadow:'0 0 30px #22d3ee,0 0 60px #0ea5e9', fontFamily:'Orbitron,sans-serif' }}>
+                  REJOUER ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid gap-2" style={{ gridTemplateColumns:'1fr auto 1fr', flexShrink:0 }}>
+            <button
+              onPointerDown={() => { movingLeftRef.current = true; }}
+              onPointerUp={() => { movingLeftRef.current = false; }}
+              onPointerLeave={() => { movingLeftRef.current = false; }}
+              onTouchStart={(e) => { e.preventDefault(); movingLeftRef.current = true; }}
+              onTouchEnd={() => { movingLeftRef.current = false; }}
+              className="rounded-2xl text-2xl text-white font-black"
+              style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,0.5)', fontFamily:'Orbitron,sans-serif', userSelect:'none' }}>
+              ◄◄
+            </button>
+            <button onClick={fire}
+                    className="rounded-2xl text-base text-white font-black"
+                    style={{ padding:'14px 20px', background:'linear-gradient(135deg,#f97316,#facc15)', boxShadow:'0 0 24px rgba(249,115,22,0.5)', fontFamily:'Orbitron,sans-serif', whiteSpace:'nowrap' }}>
+              🔥 TIRER
+            </button>
+            <button
+              onPointerDown={() => { movingRightRef.current = true; }}
+              onPointerUp={() => { movingRightRef.current = false; }}
+              onPointerLeave={() => { movingRightRef.current = false; }}
+              onTouchStart={(e) => { e.preventDefault(); movingRightRef.current = true; }}
+              onTouchEnd={() => { movingRightRef.current = false; }}
+              className="rounded-2xl text-2xl text-white font-black"
+              style={{ padding:'14px 0', background:'linear-gradient(135deg,#0ea5e9,#22d3ee)', boxShadow:'0 0 20px rgba(14,165,233,0.5)', fontFamily:'Orbitron,sans-serif', userSelect:'none' }}>
+              ►►
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState('menu');
+      if (screen === 'menu')     return <MenuScreen onSelect={setScreen}/>;
+      if (screen === 'neonbeat') return <RhythmGame onBack={() => setScreen('menu')}/>;
+      if (screen === 'snake')    return <SnakeGame  onBack={() => setScreen('menu')}/>;
+      if (screen === 'dog')      return <DogGame    onBack={() => setScreen('menu')}/>;
+      if (screen === 'candy')    return <CandyGame  onBack={() => setScreen('menu')}/>;
+      if (screen === 'pirate')   return <PirateGame onBack={() => setScreen('menu')}/>;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
