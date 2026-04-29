@@ -712,6 +712,7 @@
       const [bones, setBones] = useState(0);
       const [jumping, setJumping] = useState(false);
       const [jumpCount, setJumpCount] = useState(0);
+      const [doubleJumpReady, setDoubleJumpReady] = useState(false);
 
       const obsRef = useRef([]);
       const playerYRef = useRef(0);
@@ -719,11 +720,13 @@
       const speedRef = useRef(1);
       const livesRef = useRef(3);
       const jumpCountRef = useRef(0);
+      const doubleJumpRef = useRef(false);
 
       useEffect(() => { obsRef.current = obstacles; }, [obstacles]);
       useEffect(() => { speedRef.current = speed; }, [speed]);
       useEffect(() => { livesRef.current = lives; }, [lives]);
       useEffect(() => { jumpCountRef.current = jumpCount; }, [jumpCount]);
+      useEffect(() => { doubleJumpRef.current = doubleJumpReady; }, [doubleJumpReady]);
 
       function addMessage(text) {
         setMessage(text);
@@ -744,17 +747,29 @@
         setJumping(false);
         setJumpCount(0);
         jumpCountRef.current = 0;
-        setMessage('Appuie sur SAUTER pour esquiver les obstacles.');
+        setDoubleJumpReady(false);
+        doubleJumpRef.current = false;
+        setMessage('Saute les obstacles ! Attrape un os pour le double saut.');
         setGameOver(false);
         setStarted(true);
       }
 
       function jump() {
-        if (!started || gameOver || jumpCountRef.current >= 2) return;
-        jumpCountRef.current += 1;
+        if (!started || gameOver || jumpCountRef.current >= 1) return;
+        jumpCountRef.current = 1;
         velRef.current = 0.45;
         setJumping(true);
-        setJumpCount(jumpCountRef.current);
+        setJumpCount(1);
+      }
+
+      function doubleJump() {
+        if (!started || gameOver || !doubleJumpRef.current) return;
+        jumpCountRef.current = 2;
+        velRef.current = 0.78;
+        doubleJumpRef.current = false;
+        setDoubleJumpReady(false);
+        setJumping(true);
+        setJumpCount(2);
       }
 
       useEffect(() => {
@@ -800,7 +815,9 @@
                 setScore(s => s + 34);
                 setBones(b => b + 1);
                 playEat();
-                addMessage("Os récupéré ! Pas de vie gagnée.");
+                doubleJumpRef.current = true;
+                setDoubleJumpReady(true);
+                addMessage('🦴 Double saut chargé !');
                 return;
               }
               if (o.type === 'cursed' && dogJump) {
@@ -935,13 +952,27 @@
             </div>
           </div>
 
-          <div className="w-full max-w-full lg:max-w-3xl mt-4 z-10 flex flex-col items-center gap-3">
-            <button onPointerDown={jump} onMouseDown={jump} onTouchStart={(e) => { e.preventDefault(); jump(); }}
-                    className="rounded-full px-10 py-4 text-xl font-black text-white"
-                    style={{ width:'100%', background:'linear-gradient(135deg,#ffdd55,#ff9933)', boxShadow:'0 0 30px #ffd700,0 0 60px #ff9900', fontFamily:'Orbitron,sans-serif', letterSpacing:'.08em' }}>
-              SAUTER
-            </button>
-            <div className="text-slate-300 text-sm" style={{ fontFamily:'Orbitron,sans-serif', minHeight:'1.2rem' }}>{message}</div>
+          <div className="w-full max-w-full lg:max-w-3xl mt-3 z-10 flex flex-col items-center gap-2">
+            <div className="w-full grid grid-cols-2 gap-3">
+              <button onPointerDown={jump} onMouseDown={jump} onTouchStart={(e) => { e.preventDefault(); jump(); }}
+                      className="rounded-2xl py-4 text-lg font-black text-white"
+                      style={{ background:'linear-gradient(135deg,#ff9933,#ff6600)', boxShadow:'0 0 20px rgba(255,150,0,.5)', fontFamily:'Orbitron,sans-serif', letterSpacing:'.06em' }}>
+                🦘 SAUTER
+              </button>
+              <button onPointerDown={doubleJump} onMouseDown={doubleJump} onTouchStart={(e) => { e.preventDefault(); doubleJump(); }}
+                      className="rounded-2xl py-4 text-lg font-black"
+                      style={{
+                        background: doubleJumpReady ? 'linear-gradient(135deg,#ffd700,#ffaa00)' : 'rgba(60,60,70,.8)',
+                        boxShadow: doubleJumpReady ? '0 0 24px rgba(255,215,0,.8),0 0 48px rgba(255,215,0,.3)' : 'none',
+                        color: doubleJumpReady ? '#000' : '#444',
+                        border: doubleJumpReady ? 'none' : '2px solid rgba(255,255,255,.08)',
+                        fontFamily:'Orbitron,sans-serif', letterSpacing:'.06em',
+                        transition:'all .2s ease',
+                      }}>
+                {doubleJumpReady ? '⚡ DOUBLE' : '🔒 DOUBLE'}
+              </button>
+            </div>
+            <div className="text-slate-300 text-sm text-center" style={{ fontFamily:'Orbitron,sans-serif', minHeight:'1.2rem' }}>{message}</div>
           </div>
         </div>
       );
