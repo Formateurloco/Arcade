@@ -1443,14 +1443,26 @@
               break;
             }
           }
-          if(ball.y-BALL_R>GH){lost=true;return;}
+          if(ball.y-BALL_R>GH){
+            lost=true;
+            return;
+          }
           kept.push(ball);
         });
         g.balls=kept;
         if(lost&&g.balls.length===0){
-          g.lives--;setUiLives(g.lives);playMiss();
-          if(g.lives<=0){phaseRef.current='over';setPhase('over');return;}
-          const spd=4.8+g.level*0.4;g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20,spd)];
+          g.lives--;
+          setUiLives(g.lives);
+          playMiss();
+          if(g.lives<=0){
+            phaseRef.current='over';
+            setPhase('over');
+            return;
+          }
+          const spd=4.8+g.level*0.4;
+          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20,spd)];
+          phaseRef.current='playing';
+          setPhase('playing');
         }
         if(g.blocks.length===0){
           if(g.level<4){phaseRef.current='levelup';setPhase('levelup');}
