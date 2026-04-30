@@ -206,6 +206,14 @@
               <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#ffd700', textShadow:'0 0 8px #ffd700', letterSpacing:'.08em' }}>CANON BREAK</span>
               <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Détruis le trésor avec tes boulets !</span>
             </button>
+
+            <button onClick={() => { getAudio(); onSelect('chattraque'); }}
+                    className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
+                    style={{ '--clr':'#aa55ff', borderColor:'rgba(170,85,255,0.35)', background:'rgba(170,85,255,0.07)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'4.4s' }}>
+              <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #aa55ff)' }}>🐱🐕</span>
+              <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#bb88ff', textShadow:'0 0 8px #aa55ff', letterSpacing:'.08em' }}>FUITE FÉLINE</span>
+              <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Échappe aux chiens dans le labyrinthe !</span>
+            </button>
           </div>
         </div>
       );
@@ -1621,7 +1629,282 @@
       );
     }
 
-        // ── App ───────────────────────────────────────────────────────────────────
+    
+    // ── Fuite Féline ─────────────────────────────────────────────────────────
+    function ChatTraque({ onBack }) {
+      const GW=360,GH=456,TILE=24,COLS=15,ROWS=19,INVINC=120;
+      const CAT_SPD=2.5;
+
+      const cvsRef=useRef(null),gRef=useRef(null),rafRef=useRef(null);
+      const dirRef=useRef([0,0]);
+      const phsRef=useRef('menu');
+      const [phase,setPhase]=useState('menu');
+      const [uiTime,setUiTime]=useState(0);
+      const [uiLives,setUiLives]=useState(3);
+      const [best,setBest]=useState(()=>+(localStorage.getItem('ft_best')||0));
+
+      function tp(t){return t*TILE+TILE/2;}
+
+      function genMaze(){
+        const m=Array.from({length:ROWS},()=>new Array(COLS).fill(0));
+        const stk=[[1,1]];m[1][1]=1;
+        while(stk.length){
+          const[cx,cy]=stk[stk.length-1];
+          const nb=[];
+          for(const[dx,dy] of [[0,-2],[0,2],[-2,0],[2,0]]){
+            const nx=cx+dx,ny=cy+dy;
+            if(nx>0&&nx<COLS-1&&ny>0&&ny<ROWS-1&&m[ny][nx]===0)nb.push([nx,ny,dx,dy]);
+          }
+          if(nb.length){const[nx,ny,dx,dy]=nb[Math.floor(Math.random()*nb.length)];m[cy+dy/2][cx+dx/2]=1;m[ny][nx]=1;stk.push([nx,ny]);}
+          else stk.pop();
+        }
+        // Boucles supplémentaires : ouvre ~12% des murs horizontaux internes
+        for(let y=2;y<ROWS-1;y+=2)
+          for(let x=1;x<COLS-1;x+=2)
+            if(m[y][x]===0&&Math.random()<0.12)m[y][x]=1;
+        return m;
+      }
+
+      function bfs(maze,sx,sy,gx,gy){
+        if(sx===gx&&sy===gy)return[];
+        const q=[[sx,sy]],prev=new Map([[`${sx},${sy}`,null]]);
+        while(q.length){
+          const[cx,cy]=q.shift();
+          if(cx===gx&&cy===gy)break;
+          for(const[dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+            const nx=cx+dx,ny=cy+dy,k=`${nx},${ny}`;
+            if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&maze[ny][nx]===1&&!prev.has(k)){prev.set(k,[cx,cy]);q.push([nx,ny]);}
+          }
+        }
+        if(!prev.has(`${gx},${gy}`))return[];
+        const path=[];let cur=[gx,gy];
+        while(cur&&!(cur[0]===sx&&cur[1]===sy)){path.unshift([...cur]);cur=prev.get(`${cur[0]},${cur[1]}`);}
+        return path;
+      }
+
+      function mkDog(tx,ty,spd){
+        return{tx,ty,x:tp(tx),y:tp(ty),targetX:tp(tx),targetY:tp(ty),moving:false,path:[],ptimer:30+Math.floor(Math.random()*20),speed:spd};
+      }
+
+      function startGame(){
+        const maze=genMaze();
+        const cat={tx:1,ty:1,x:tp(1),y:tp(1),targetX:tp(1),targetY:tp(1),moving:false,invinc:INVINC};
+        gRef.current={maze,cat,dogs:[mkDog(13,17,1.1)],ticks:0,lives:3,nextSpawn:15*60,dogCount:1,flash:0};
+        phsRef.current='play';setPhase('play');setUiTime(0);setUiLives(3);dirRef.current=[0,0];
+      }
+
+      function update(){
+        const g=gRef.current;if(!g)return;
+        g.ticks++;
+        if(g.ticks%60===0)setUiTime(Math.floor(g.ticks/60));
+
+        // Nouveau chien toutes les 15 secondes (max 4)
+        if(g.dogCount<4&&g.ticks>=g.nextSpawn){
+          const spawns=[[1,17,1.25],[13,1,1.4],[7,17,1.55]];
+          const sp=spawns[g.dogCount-1];
+          if(sp){g.dogs.push(mkDog(sp[0],sp[1],sp[2]));g.flash=25;}
+          g.dogCount++;g.nextSpawn+=15*60;
+        }
+        if(g.flash>0)g.flash--;
+
+        // Mouvement du chat
+        const cat=g.cat;
+        if(cat.invinc>0)cat.invinc--;
+        if(!cat.moving){
+          const[dx,dy]=dirRef.current;
+          if(dx||dy){
+            const ntx=cat.tx+dx,nty=cat.ty+dy;
+            if(ntx>=0&&ntx<COLS&&nty>=0&&nty<ROWS&&g.maze[nty][ntx]===1){
+              cat.tx=ntx;cat.ty=nty;cat.targetX=tp(ntx);cat.targetY=tp(nty);cat.moving=true;
+            }
+          }
+        }else{
+          const dx=cat.targetX-cat.x,dy=cat.targetY-cat.y,d=Math.hypot(dx,dy);
+          if(d<=CAT_SPD){cat.x=cat.targetX;cat.y=cat.targetY;cat.moving=false;}
+          else{cat.x+=dx/d*CAT_SPD;cat.y+=dy/d*CAT_SPD;}
+        }
+
+        // Déplacement + IA des chiens
+        let caught=false;
+        g.dogs.forEach(dog=>{
+          dog.ptimer--;
+          if(dog.ptimer<=0){
+            dog.ptimer=40+Math.floor(Math.random()*25);
+            if(Math.random()<0.78){
+              dog.path=bfs(g.maze,dog.tx,dog.ty,cat.tx,cat.ty);
+            }else{
+              // Déambulation aléatoire
+              const opts=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>{
+                const nx=dog.tx+dx,ny=dog.ty+dy;
+                return nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&g.maze[ny][nx]===1;
+              });
+              if(opts.length){const o=opts[Math.floor(Math.random()*opts.length)];dog.path=[[dog.tx+o[0],dog.ty+o[1]]];}
+            }
+          }
+          if(!dog.moving&&dog.path.length>0){
+            const[ntx,nty]=dog.path.shift();
+            dog.tx=ntx;dog.ty=nty;dog.targetX=tp(ntx);dog.targetY=tp(nty);dog.moving=true;
+          }
+          if(dog.moving){
+            const dx=dog.targetX-dog.x,dy=dog.targetY-dog.y,d=Math.hypot(dx,dy);
+            if(d<=dog.speed){dog.x=dog.targetX;dog.y=dog.targetY;dog.moving=false;}
+            else{dog.x+=dx/d*dog.speed;dog.y+=dy/d*dog.speed;}
+          }
+          // Collision chat/chien
+          if(!caught&&cat.invinc===0&&Math.hypot(dog.x-cat.x,dog.y-cat.y)<TILE*0.7){
+            caught=true;
+            cat.invinc=INVINC;
+            g.lives--;setUiLives(g.lives);playDie();
+            if(g.lives<=0){
+              const secs=Math.floor(g.ticks/60);setUiTime(secs);
+              if(secs>+(localStorage.getItem('ft_best')||0)){localStorage.setItem('ft_best',String(secs));setBest(secs);}
+              phsRef.current='over';setPhase('over');
+            }else{
+              cat.tx=1;cat.ty=1;cat.x=tp(1);cat.y=tp(1);cat.targetX=tp(1);cat.targetY=tp(1);cat.moving=false;
+              g.dogs.forEach(d=>{d.path=[];d.ptimer=90;});
+            }
+          }
+        });
+      }
+
+      function draw(){
+        const canvas=cvsRef.current;if(!canvas)return;
+        const ctx=canvas.getContext('2d'),g=gRef.current;
+        ctx.fillStyle='#030318';ctx.fillRect(0,0,GW,GH);
+        if(!g)return;
+        // Tuiles du labyrinthe
+        for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+          if(g.maze[y][x]===0){
+            ctx.fillStyle='#161650';ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+            ctx.fillStyle='rgba(60,60,180,0.18)';ctx.fillRect(x*TILE+2,y*TILE+2,TILE-4,TILE-4);
+          }else{
+            ctx.fillStyle='#07071c';ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+          }
+        }
+        // Grille légère sur les couloirs
+        ctx.strokeStyle='rgba(40,40,120,0.35)';ctx.lineWidth=0.4;
+        for(let y=0;y<=ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*TILE);ctx.lineTo(GW,y*TILE);ctx.stroke();}
+        for(let x=0;x<=COLS;x++){ctx.beginPath();ctx.moveTo(x*TILE,0);ctx.lineTo(x*TILE,GH);ctx.stroke();}
+        // Vignette danger (rouge quand un chien est proche)
+        const minD=g.dogs.reduce((m,d)=>Math.min(m,Math.hypot(d.x-g.cat.x,d.y-g.cat.y)),9999);
+        if(minD<TILE*5){
+          const a=(1-minD/(TILE*5))*0.32;
+          const vg=ctx.createRadialGradient(GW/2,GH/2,GH*0.2,GW/2,GH/2,GH*0.75);
+          vg.addColorStop(0,'rgba(220,0,0,0)');vg.addColorStop(1,`rgba(220,0,0,${a})`);
+          ctx.fillStyle=vg;ctx.fillRect(0,0,GW,GH);
+        }
+        // Chiens
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        g.dogs.forEach(dog=>{
+          ctx.save();ctx.shadowColor='#ff4400';ctx.shadowBlur=16;
+          ctx.font=`${TILE+2}px serif`;ctx.fillText('🐕',dog.x,dog.y+2);
+          ctx.restore();
+        });
+        // Chat (clignote pendant l'invincibilité)
+        const cat=g.cat;
+        if(cat.invinc===0||Math.floor(cat.invinc/8)%2===0){
+          ctx.save();ctx.shadowColor='#44ddff';ctx.shadowBlur=16;
+          ctx.font=`${TILE+2}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('🐱',cat.x,cat.y+2);
+          ctx.restore();
+        }
+        // Flash d'alerte (nouveau chien)
+        if(g.flash>0){
+          ctx.fillStyle=`rgba(255,80,0,${g.flash/25*0.4})`;ctx.fillRect(0,0,GW,GH);
+          if(g.flash>12){
+            ctx.save();ctx.font='bold 15px Orbitron,sans-serif';ctx.textAlign='center';ctx.fillStyle='#ffbb44';
+            ctx.shadowColor='#ff6600';ctx.shadowBlur=18;
+            ctx.fillText('🐕  UN NOUVEAU CHIEN !',GW/2,GH/2);ctx.restore();
+          }
+        }
+      }
+
+      useEffect(()=>{
+        if(phase!=='play')return;
+        let last=0;
+        const loop=(t)=>{
+          if(phsRef.current!=='play')return;
+          try{if(t-last>=16){last=t;update();draw();}}catch(e){console.error('FF:',e);try{draw();}catch(_){}}
+          rafRef.current=requestAnimationFrame(loop);
+        };
+        rafRef.current=requestAnimationFrame(loop);
+        return()=>{cancelAnimationFrame(rafRef.current);};
+      },[phase]);
+      useEffect(()=>{draw();},[]);
+
+      const btnStyle={background:'linear-gradient(135deg,#5b21b6,#1d4ed8)',boxShadow:'0 0 12px rgba(109,40,217,.55)',borderRadius:'14px',border:'none',color:'white',fontSize:'1.3rem',fontWeight:900,cursor:'pointer',userSelect:'none',touchAction:'none',display:'flex',alignItems:'center',justifyContent:'center'};
+      function dBtn(d,lbl){return{onPointerDown:(e)=>{e.preventDefault();dirRef.current=d;},onPointerUp:()=>{dirRef.current=[0,0];},onPointerLeave:()=>{dirRef.current=[0,0];},onTouchStart:(e)=>{e.preventDefault();dirRef.current=d;},onTouchEnd:()=>{dirRef.current=[0,0];},style:btnStyle,children:lbl};}
+
+      return (
+        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
+             style={{height:'100dvh',background:'radial-gradient(circle at 50% 15%,#0d0050 0%,#030310 65%)',position:'relative'}}>
+          <div className="blob" style={{width:200,height:200,background:'#7700ff',top:-60,left:-50}}/>
+          <div className="blob" style={{width:150,height:150,background:'#003bff',bottom:60,right:-30,animationDelay:'5s'}}/>
+
+          {/* En-tête */}
+          <div className="w-full max-w-full flex items-center justify-between mb-1 z-10" style={{flexShrink:0}}>
+            <div className="flex items-center gap-3">
+              <button onClick={onBack} style={{fontFamily:'Orbitron,sans-serif',fontSize:'.58rem',color:'#666',border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',borderRadius:'8px',padding:'4px 10px',cursor:'pointer'}}>← MENU</button>
+              <div>
+                <h1 className="font-black tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1rem',color:'#bb88ff',textShadow:'0 0 10px #7700ff'}}>FUITE FÉLINE</h1>
+                <div className="flex items-center gap-0.5 mt-0.5">
+                  {[0,1,2].map(i=><span key={i} style={{fontSize:'.85rem',opacity:i<uiLives?1:.15,filter:i<uiLives?'drop-shadow(0 0 5px #ff2244)':'none',transition:'opacity .3s'}}>❤️</span>)}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-black" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.6rem',lineHeight:1,color:'#ffd700',textShadow:'0 0 12px #ffd700'}}>{uiTime}<span style={{fontSize:'.7rem'}}>s</span></p>
+              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.48rem',color:'#666'}}>RECORD : {best}s</div>
+            </div>
+          </div>
+
+          {/* Canvas */}
+          <div className="relative w-full rounded-2xl overflow-hidden z-10" style={{flex:1,minHeight:0}}>
+            <canvas ref={cvsRef} width={GW} height={GH} style={{width:'100%',height:'100%',display:'block',touchAction:'none'}}/>
+            {phase==='menu'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(2,2,18,.93)',backdropFilter:'blur(4px)'}}>
+                <p className="text-5xl mb-2">🐱</p>
+                <h2 className="font-black mb-1 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.55rem',color:'#bb88ff',textShadow:'0 0 20px #7700ff'}}>FUITE FÉLINE</h2>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Guide le chat dans le labyrinthe.<br/>Échappe aux chiens le plus longtemps !</p>
+                <div className="flex gap-6 mb-4 text-center">
+                  <div><span className="text-2xl">🐕</span><br/><span style={{fontSize:'.6rem',color:'#ff9988'}}>Te traque</span></div>
+                  <div><span className="text-2xl">⏱️</span><br/><span style={{fontSize:'.6rem',color:'#ffcc44'}}>+1 chien/15s</span></div>
+                  <div><span className="text-2xl">❤️</span><br/><span style={{fontSize:'.6rem',color:'#ff4466'}}>3 vies</span></div>
+                </div>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#7700ff,#1d4ed8)',boxShadow:'0 0 30px #7700ff',fontFamily:'Orbitron,sans-serif'}}>JOUER ▶</button>
+              </div>
+            )}
+            {phase==='over'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(2,2,18,.94)',backdropFilter:'blur(4px)'}}>
+                <p className="text-5xl mb-2">😿</p>
+                <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:'#ff4444',textShadow:'0 0 20px #ff0000'}}>CAPTURÉ !</h2>
+                <p style={{fontFamily:'Orbitron,sans-serif',fontSize:'.7rem',color:'#aa88ff',marginBottom:'4px'}}>SURVIE</p>
+                <p className="font-black" style={{fontFamily:'Orbitron,sans-serif',fontSize:'2.6rem',color:'#ffd700',textShadow:'0 0 20px #ffd700',lineHeight:1}}>{uiTime}<span style={{fontSize:'1.2rem'}}>s</span></p>
+                <p style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',color:'#666',margin:'6px 0 20px'}}>RECORD : {best}s</p>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#7700ff,#1d4ed8)',boxShadow:'0 0 30px #7700ff',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
+              </div>
+            )}
+          </div>
+
+          {/* Croix directionnelle */}
+          <div className="z-10 mt-2 mb-1" style={{flexShrink:0}}>
+            <div style={{display:'grid',gridTemplateColumns:'56px 56px 56px',gridTemplateRows:'48px 48px 48px',gap:'5px'}}>
+              <div/>
+              <button {...dBtn([0,-1],'▲')}/>
+              <div/>
+              <button {...dBtn([-1,0],'◄')}/>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem',opacity:.6}}>🐱</div>
+              <button {...dBtn([1,0],'►')}/>
+              <div/>
+              <button {...dBtn([0,1],'▼')}/>
+              <div/>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────────────────────
     function App() {
       const [screen, setScreen] = useState('menu');
       if (screen === 'menu')     return <MenuScreen onSelect={setScreen}/>;
@@ -1631,6 +1914,7 @@
       if (screen === 'candy')       return <CandyGame    onBack={() => setScreen('menu')}/>;
       if (screen === 'pirate')      return <PirateGame   onBack={() => setScreen('menu')}/>;
       if (screen === 'cannonbreak') return <CannonBreak  onBack={() => setScreen('menu')}/>;
+      if (screen === 'chattraque')  return <ChatTraque   onBack={() => setScreen('menu')}/>;
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
