@@ -1353,238 +1353,221 @@
 
     // ── Canon Break ──────────────────────────────────────────────────────────
     function CannonBreak({ onBack }) {
-      const GW=360,GH=540,BH=20,BR=8,GAP=20,PH=14;
-      const BNUS={wide:{color:'#00ff88',icon:'⚓'},narrow:{color:'#ff4444',icon:'☠️'},multiball:{color:'#aa44ff',icon:'💣'},slow:{color:'#22d3ee',icon:'🌊'},life:{color:'#ff2244',icon:'❤️'}};
-      const LEVEL_NAMES=['GRILLE','PYRAMIDE','DAMIER','VAGUES','BOSS'];
+      // Constantes — BGAP(22) > 2*BR(18) : la balle ne peut jamais toucher deux rangées simultanément
+      const GW=360,GH=560,BR=9,PH=13;
+      const BH=18,BGAP=22;
+      const BCOLS=8,BW=Math.floor((GW-16)/BCOLS);
+      const BNUS={wide:{color:'#00ff88',icon:'⚓'},multi:{color:'#aa44ff',icon:'💣'},slow:{color:'#22d3ee',icon:'🌊'},life:{color:'#ff2244',icon:'❤️'}};
+      const LNAMES=['GRILLE','PYRAMIDE','DAMIER','VAGUES','BOSS'];
 
-      const canvasRef=useRef(null),gRef=useRef(null),rafRef=useRef(null),movRef=useRef(0),phaseRef=useRef('menu');
+      const cvsRef=useRef(null),gRef=useRef(null),rafRef=useRef(null),movRef=useRef(0),phsRef=useRef('menu');
       const [phase,setPhase]=useState('menu');
-      const [uiScore,setUiScore]=useState(0);
-      const [uiLives,setUiLives]=useState(3);
-      const [uiLevel,setUiLevel]=useState(1);
+      const [uiSc,setUiSc]=useState(0);
+      const [uiHp,setUiHp]=useState(3);
+      const [uiLv,setUiLv]=useState(1);
       const [won,setWon]=useState(false);
-      const [levelName,setLevelName]=useState('');
 
-      function mkBall(x,y,spd){const a=-Math.PI/2+(Math.random()*.6-.3);return{x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd};}
+      function mkBall(x,y,spd){const a=-Math.PI/2+(Math.random()-.5)*0.9;return{x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd};}
+      function mkBlk(x,y,hp,col,pts,bon){return{x,y,w:BW-4,h:BH,hp,maxHp:hp,color:col,pts,bonus:bon||null};}
 
-      function buildBlocks(lvl){
-        const b=[],BW=Math.floor((GW-16)/7),S=BH+GAP,sy=50;
-        const mk=(x,y,hp,col,pts,bon)=>b.push({x,y,w:BW-4,h:BH,hp,maxHp:hp,color:col,pts,bonus:bon});
-        if(lvl===0){
-          [['#aa44ff',30,2,'multiball'],['#ff4444',20,2,null],['#00ff88',15,1,'wide'],['#22d3ee',12,1,null],['#ffd700',10,1,null]]
-            .forEach(([col,pts,hp,bon],r)=>{for(let c=0;c<7;c++)mk(8+c*BW,sy+r*S,hp,col,pts,bon);});
-        } else if(lvl===1){
-          [[3,2,'#aa44ff',40,'multiball'],[5,2,'#ff4444',30,null],[7,1,'#ffd700',20,'wide'],[5,1,'#00ff88',15,null],[3,1,'#22d3ee',10,null]]
-            .forEach(([n,hp,col,pts,bon],r)=>{const sc=Math.floor((7-n)/2);for(let c=0;c<n;c++)mk(8+(sc+c)*BW,sy+r*S,hp,col,pts,bon);});
-        } else if(lvl===2){
-          const pal=[['#ff4444',25,2,null],['#ffd700',20,1,'wide'],['#aa44ff',30,2,'multiball'],['#00ff88',15,1,null],['#22d3ee',12,1,'life'],['#ff8800',18,2,null],['#ff44aa',22,1,null]];
-          for(let r=0;r<6;r++)for(let c=0;c<7;c++){if((r+c)%2===0){const[col,pts,hp,bon]=pal[(r*7+c)%pal.length];mk(8+c*BW,sy+r*S,hp,col,pts,bon);}}
-        } else if(lvl===3){
-          [[7,1,'#ff4444',15,null],[5,2,'#ffd700',25,'wide'],[3,1,'#aa44ff',20,null],[7,1,'#00ff88',15,'life'],[5,2,'#22d3ee',25,null],[3,1,'#ff8800',20,null]]
-            .forEach(([n,hp,col,pts,bon],r)=>{const sc=Math.floor((7-n)/2);for(let c=0;c<n;c++)mk(8+(sc+c)*BW,sy+r*S,hp,col,pts,bon);});
+      function buildLevel(n){
+        const sy=55,S=BH+BGAP,bs=[];
+        if(n===0){
+          [['#aa44ff',30,2,'multi'],['#ff3344',20,2,null],['#00cc66',15,1,'wide'],['#22aaff',12,1,null],['#ffcc00',10,1,null]]
+            .forEach(([c,p,h,b],r)=>{for(let cl=0;cl<BCOLS;cl++)bs.push(mkBlk(8+cl*BW,sy+r*S,h,c,p,b));});
+        } else if(n===1){
+          [[2,2,'#aa44ff',40,'multi'],[4,2,'#ff3344',30,null],[6,1,'#ffcc00',20,'wide'],[8,1,'#00cc66',15,null],[6,1,'#22aaff',10,null],[4,1,'#ff8800',8,null]]
+            .forEach(([cnt,h,c,p,b],r)=>{const off=Math.floor((BCOLS-cnt)/2);for(let cl=0;cl<cnt;cl++)bs.push(mkBlk(8+(off+cl)*BW,sy+r*S,h,c,p,b));});
+        } else if(n===2){
+          const pal=[['#ff3344',25,2,null],['#ffcc00',20,1,'wide'],['#aa44ff',30,2,'multi'],['#00cc66',15,1,null],['#22aaff',12,1,'life'],['#ff8800',18,2,null]];
+          for(let r=0;r<7;r++)for(let cl=0;cl<BCOLS;cl++)if((r+cl)%2===0){const[c,p,h,b]=pal[(r*BCOLS+cl)%pal.length];bs.push(mkBlk(8+cl*BW,sy+r*S,h,c,p,b));}
+        } else if(n===3){
+          [[8,1,'#ff3344',15,null],[6,2,'#ffcc00',25,'wide'],[4,1,'#aa44ff',20,null],[8,1,'#00cc66',15,'life'],[6,2,'#22aaff',25,null],[4,1,'#ff8800',20,null],[8,1,'#ff3344',15,null]]
+            .forEach(([cnt,h,c,p,b],r)=>{const off=Math.floor((BCOLS-cnt)/2);for(let cl=0;cl<cnt;cl++)bs.push(mkBlk(8+(off+cl)*BW,sy+r*S,h,c,p,b));});
         } else {
-          [['#ff0066',60,3,null],['#aa44ff',50,3,'multiball'],['#ff4444',40,2,null],['#ff8800',32,2,'wide'],['#ffd700',25,2,null],['#00ff88',18,1,'life'],['#22d3ee',12,1,null]]
-            .forEach(([col,pts,hp,bon],r)=>{for(let c=0;c<7;c++)mk(8+c*BW,sy+r*(BH+GAP-4),hp,col,pts,bon);});
+          [['#ff0055',70,3,null],['#aa44ff',60,3,'multi'],['#ff3344',45,2,null],['#ff8800',35,2,'wide'],['#ffcc00',25,2,null],['#00cc66',18,1,'life'],['#22aaff',12,1,null]]
+            .forEach(([c,p,h,b],r)=>{for(let cl=0;cl<BCOLS;cl++)bs.push(mkBlk(8+cl*BW,sy+r*(BH+BGAP-4),h,c,p,b));});
         }
-        return b;
+        return bs;
       }
 
-      function startLevel(lvl,prevScore,prevLives){
-        const pw=110,spd=5+lvl*0.35;
-        gRef.current={balls:[mkBall(GW/2,GH-80,spd)],pad:{x:(GW-pw)/2,y:GH-38,w:pw},blocks:buildBlocks(lvl),bonuses:[],bonusesSpawned:new Set(),score:prevScore||0,lives:prevLives||3,level:lvl};
-        phaseRef.current='playing';setPhase('playing');setUiScore(prevScore||0);setUiLives(prevLives||3);setUiLevel(lvl+1);setLevelName(LEVEL_NAMES[lvl]);
+      function startLevel(n,sc,hp){
+        gRef.current={lv:n,score:sc||0,lives:hp||3,balls:[mkBall(GW/2,GH-90,5+n*0.4)],pad:{x:(GW-100)/2,y:GH-44,w:100},blocks:buildLevel(n),drops:[],spawned:new Set()};
+        phsRef.current='play';setPhase('play');setUiSc(sc||0);setUiHp(hp||3);setUiLv(n+1);
       }
+      function newGame(){setWon(false);startLevel(0,0,3);}
 
-      function startGame(){setWon(false);startLevel(0,0,3);}
-
-      function applyBonus(type,g){
+      function applyDrop(type,g){
         playEat();
-        if(type==='wide')     g.pad.w=Math.min(210,g.pad.w+44);
-        if(type==='narrow')   g.pad.w=Math.max(36,g.pad.w-32);
-        if(type==='multiball'){const b=g.balls[0]||{x:GW/2,y:GH-80};const spd=4.8+g.level*0.4;g.balls.push(mkBall(b.x,b.y,spd));}
-        if(type==='slow')     g.balls.forEach(b=>{b.vx*=.72;b.vy*=.72;});
-        if(type==='life')     {g.lives=Math.min(5,g.lives+1);setUiLives(g.lives);}
+        if(type==='wide') g.pad.w=Math.min(220,g.pad.w+50);
+        if(type==='narrow') g.pad.w=Math.max(40,g.pad.w-28);
+        if(type==='multi'){const ref=g.balls[0]||{x:GW/2,y:GH-90};g.balls.push(mkBall(ref.x,ref.y,5+g.lv*0.4));}
+        if(type==='slow') g.balls.forEach(b=>{b.vx*=0.75;b.vy*=0.75;});
+        if(type==='life'){g.lives=Math.min(5,g.lives+1);setUiHp(g.lives);}
       }
 
-      function gameUpdate(){
+      function update(){
         const g=gRef.current;if(!g)return;
-        const PS=5.5;
-        if(movRef.current<0)g.pad.x=Math.max(0,g.pad.x-PS);
-        if(movRef.current>0)g.pad.x=Math.min(GW-g.pad.w,g.pad.x+PS);
-        g.bonuses=g.bonuses.filter(bn=>{
-          bn.y+=2.2;
-          if(bn.y>g.pad.y&&bn.y<g.pad.y+PAD_H&&bn.x>g.pad.x&&bn.x<g.pad.x+g.pad.w){applyBonus(bn.type,g);return false;}
-          return bn.y<GH+20;
+        if(movRef.current<0)g.pad.x=Math.max(0,g.pad.x-6);
+        if(movRef.current>0)g.pad.x=Math.min(GW-g.pad.w,g.pad.x+6);
+        g.drops=g.drops.filter(d=>{
+          d.y+=2.5;
+          if(d.y>g.pad.y&&d.y<g.pad.y+PH&&d.x>g.pad.x&&d.x<g.pad.x+g.pad.w){applyDrop(d.type,g);return false;}
+          return d.y<GH+20;
         });
-        const kept=[];let lost=false;
-        g.balls.forEach(ball=>{
-          const px=ball.x,py=ball.y;
-          ball.x+=ball.vx;ball.y+=ball.vy;
-          if(ball.x-BR<0){ball.x=BR;ball.vx=Math.abs(ball.vx);}
-          if(ball.x+BR>GW){ball.x=GW-BR;ball.vx=-Math.abs(ball.vx);}
-          if(ball.y-BR<0){ball.y=BR;ball.vy=Math.abs(ball.vy);}
-          if(ball.vy>0&&ball.y+BR>g.pad.y&&ball.y-BR<g.pad.y+PH&&ball.x>g.pad.x-6&&ball.x<g.pad.x+g.pad.w+6){
-            ball.y=g.pad.y-BR;
-            const t=(ball.x-g.pad.x)/g.pad.w,a=(t-.5)*(Math.PI*.65),sp=Math.hypot(ball.vx,ball.vy);
-            ball.vx=Math.sin(a)*sp;ball.vy=-Math.abs(Math.cos(a)*sp);
+        const alive=[];let anyLost=false;
+        g.balls.forEach(b=>{
+          b.x+=b.vx;b.y+=b.vy;
+          if(b.x-BR<0){b.x=BR;b.vx=Math.abs(b.vx);}
+          if(b.x+BR>GW){b.x=GW-BR;b.vx=-Math.abs(b.vx);}
+          if(b.y-BR<0){b.y=BR;b.vy=Math.abs(b.vy);}
+          if(b.vy>0&&b.y+BR>g.pad.y&&b.y-BR<g.pad.y+PH&&b.x>g.pad.x-8&&b.x<g.pad.x+g.pad.w+8){
+            b.y=g.pad.y-BR;
+            const t=Math.max(0,Math.min(1,(b.x-g.pad.x)/g.pad.w)),a=(t-.5)*(Math.PI*.65),sp=Math.hypot(b.vx,b.vy);
+            b.vx=Math.sin(a)*sp;b.vy=-Math.abs(Math.cos(a)*sp);
           }
-          // Multi-pass: résout plusieurs blocs par frame si la balle en chevauche plusieurs
-          const hitSet=new Set();
-          for(let pass=0;pass<3;pass++){
-            let found=false;
-            for(let i=g.blocks.length-1;i>=0;i--){
-              const b=g.blocks[i];
-              if(hitSet.has(b))continue;
-              if(ball.x+BR>b.x&&ball.x-BR<b.x+b.w&&ball.y+BR>b.y&&ball.y-BR<b.y+b.h){
-                // Utilise la position précédente pour détecter le côté d'entrée
-                const wix=px+BR>b.x&&px-BR<b.x+b.w;
-                const wiy=py+BR>b.y&&py-BR<b.y+b.h;
-                if(!wix&&wiy){ball.vx=-ball.vx;ball.x=px<b.x+b.w/2?b.x-BR:b.x+b.w+BR;}
-                else{ball.vy=-ball.vy;ball.y=py<b.y+b.h/2?b.y-BR:b.y+b.h+BR;}
-                hitSet.add(b);b.hp--;
-                if(b.hp<=0){
-                  let bt=null;
-                  if(b.bonus&&!g.bonusesSpawned.has(b.bonus)){bt=b.bonus;}
-                  else if(!b.bonus&&Math.random()<.16){const t=['narrow','slow','life'][Math.floor(Math.random()*3)];if(!g.bonusesSpawned.has(t))bt=t;}
-                  if(bt){g.bonuses.push({x:b.x+b.w/2,y:b.y+b.h/2,type:bt});g.bonusesSpawned.add(bt);}
-                  g.blocks.splice(i,1);g.score+=b.pts;setUiScore(g.score);playEat();
-                }
-                found=true;break;
-              }
+          for(let i=g.blocks.length-1;i>=0;i--){
+            const bl=g.blocks[i];
+            if(b.x+BR<=bl.x||b.x-BR>=bl.x+bl.w||b.y+BR<=bl.y||b.y-BR>=bl.y+bl.h)continue;
+            // Chevauchement depuis chaque face
+            const oT=b.y+BR-bl.y, oB=bl.y+bl.h-(b.y-BR), oL=b.x+BR-bl.x, oR=bl.x+bl.w-(b.x-BR);
+            // Résolution : vitesse + chevauchement minimal
+            if(b.vy>0&&oT<=oB&&oT<=oL&&oT<=oR){b.vy=-Math.abs(b.vy);b.y=bl.y-BR;}
+            else if(b.vy<0&&oB<=oT&&oB<=oL&&oB<=oR){b.vy=Math.abs(b.vy);b.y=bl.y+bl.h+BR;}
+            else if(b.vx>0&&oL<=oR&&oL<=oT&&oL<=oB){b.vx=-Math.abs(b.vx);b.x=bl.x-BR;}
+            else if(b.vx<0&&oR<=oL&&oR<=oT&&oR<=oB){b.vx=Math.abs(b.vx);b.x=bl.x+bl.w+BR;}
+            else if(Math.min(oT,oB)<=Math.min(oL,oR)){b.vy=-b.vy;b.y=oT<oB?bl.y-BR:bl.y+bl.h+BR;}
+            else{b.vx=-b.vx;b.x=oL<oR?bl.x-BR:bl.x+bl.w+BR;}
+            bl.hp--;
+            if(bl.hp<=0){
+              const rnd=['slow','life'][Math.floor(Math.random()*2)];
+              const bon=bl.bonus&&!g.spawned.has(bl.bonus)?bl.bonus:(!bl.bonus&&Math.random()<.15&&!g.spawned.has(rnd)?rnd:null);
+              if(bon){g.drops.push({x:bl.x+bl.w/2,y:bl.y+bl.h/2,type:bon});g.spawned.add(bon);}
+              g.blocks.splice(i,1);g.score+=bl.pts;setUiSc(g.score);playEat();
             }
-            if(!found)break;
+            break;
           }
-          if(ball.y-BR>GH){lost=true;return;}
-          kept.push(ball);
+          if(b.y-BR>GH){anyLost=true;return;}
+          alive.push(b);
         });
-        g.balls=kept;
-        if(lost&&g.balls.length===0){
-          g.lives--;
-          setUiLives(g.lives);
-          playMiss();
-          if(g.lives<=0){
-            phaseRef.current='over';
-            setPhase('over');
-            return;
-          }
-          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20,5+g.level*0.35)];
+        g.balls=alive;
+        if(anyLost&&g.balls.length===0){
+          g.lives--;setUiHp(g.lives);playMiss();
+          if(g.lives<=0){phsRef.current='over';setPhase('over');return;}
+          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-20,5+g.lv*0.4)];
         }
         if(g.blocks.length===0){
-          if(g.level<4){phaseRef.current='levelup';setPhase('levelup');}
-          else{phaseRef.current='over';setWon(true);setPhase('over');}
+          if(g.lv<4){phsRef.current='next';setPhase('next');}
+          else{phsRef.current='over';setWon(true);setPhase('over');}
         }
       }
 
-      function gameDraw(){
-        const canvas=canvasRef.current;if(!canvas)return;
+      function draw(){
+        const canvas=cvsRef.current;if(!canvas)return;
         const ctx=canvas.getContext('2d'),g=gRef.current;
         const bg=ctx.createLinearGradient(0,0,0,GH);
-        bg.addColorStop(0,'#0a1628');bg.addColorStop(.65,'#0d2a4a');bg.addColorStop(1,'#041018');
+        bg.addColorStop(0,'#0a1628');bg.addColorStop(1,'#041018');
         ctx.fillStyle=bg;ctx.fillRect(0,0,GW,GH);
-        ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
-        for(let i=0;i<7;i++){const wy=GH*.62+i*14;ctx.beginPath();ctx.moveTo(0,wy);for(let x=0;x<=GW;x+=18)ctx.lineTo(x,wy+Math.sin(x*.06+i)*3);ctx.stroke();}
         if(!g)return;
-        g.blocks.forEach(b=>{
-          const clr=b.hp<b.maxHp?b.color+'88':b.color;
-          ctx.save();ctx.shadowColor=clr;ctx.shadowBlur=10;
-          const gr=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);gr.addColorStop(0,clr+'dd');gr.addColorStop(1,clr+'66');
-          ctx.fillStyle=gr;rrect(ctx,b.x,b.y,b.w,b.h,5);ctx.fill();ctx.strokeStyle=clr;ctx.lineWidth=1;ctx.stroke();
-          if(b.maxHp>1){ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.hp,b.x+b.w/2,b.y+b.h/2);}
+        g.blocks.forEach(bl=>{
+          const clr=bl.hp<bl.maxHp?bl.color+'99':bl.color;
+          ctx.save();ctx.shadowColor=clr;ctx.shadowBlur=12;
+          const gr=ctx.createLinearGradient(bl.x,bl.y,bl.x,bl.y+bl.h);gr.addColorStop(0,clr+'ee');gr.addColorStop(1,clr+'55');
+          ctx.fillStyle=gr;rrect(ctx,bl.x,bl.y,bl.w,bl.h,4);ctx.fill();
+          ctx.strokeStyle=clr;ctx.lineWidth=1.5;ctx.stroke();
+          if(bl.maxHp>1){ctx.fillStyle='rgba(255,255,255,.7)';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(bl.hp,bl.x+bl.w/2,bl.y+bl.h/2);}
           ctx.restore();
         });
-        g.bonuses.forEach(bn=>{
-          const d=BNUS[bn.type];ctx.save();ctx.shadowColor=d.color;ctx.shadowBlur=14;
-          ctx.fillStyle=d.color+'cc';ctx.beginPath();ctx.arc(bn.x,bn.y,13,0,Math.PI*2);ctx.fill();ctx.restore();
-          ctx.font='13px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d.icon,bn.x,bn.y);
+        g.drops.forEach(d=>{
+          const bn=BNUS[d.type];ctx.save();ctx.shadowColor=bn.color;ctx.shadowBlur=14;
+          ctx.fillStyle=bn.color+'cc';ctx.beginPath();ctx.arc(d.x,d.y,11,0,Math.PI*2);ctx.fill();ctx.restore();
+          ctx.font='11px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(bn.icon,d.x,d.y);
         });
         ctx.save();ctx.shadowColor='#22d3ee';ctx.shadowBlur=20;
         const pg=ctx.createLinearGradient(g.pad.x,g.pad.y,g.pad.x,g.pad.y+PH);
         pg.addColorStop(0,'#38e8ff');pg.addColorStop(1,'#0ea5e9');
-        ctx.fillStyle=pg;rrect(ctx,g.pad.x,g.pad.y,g.pad.w,PH,7);ctx.fill();ctx.restore();
-        g.balls.forEach(ball=>{
-          ctx.save();ctx.shadowColor='#fffbeb';ctx.shadowBlur=22;
-          const bg2=ctx.createRadialGradient(ball.x-2,ball.y-2,1,ball.x,ball.y,BR);
-          bg2.addColorStop(0,'#fff');bg2.addColorStop(.4,'#aaa');bg2.addColorStop(1,'#333');
-          ctx.fillStyle=bg2;ctx.beginPath();ctx.arc(ball.x,ball.y,BR,0,Math.PI*2);ctx.fill();ctx.restore();
+        ctx.fillStyle=pg;rrect(ctx,g.pad.x,g.pad.y,g.pad.w,PH,6);ctx.fill();ctx.restore();
+        g.balls.forEach(b=>{
+          ctx.save();ctx.shadowColor='#fffbeb';ctx.shadowBlur=20;
+          const bg2=ctx.createRadialGradient(b.x-2,b.y-2,1,b.x,b.y,BR);
+          bg2.addColorStop(0,'#fff');bg2.addColorStop(.5,'#bbb');bg2.addColorStop(1,'#444');
+          ctx.fillStyle=bg2;ctx.beginPath();ctx.arc(b.x,b.y,BR,0,Math.PI*2);ctx.fill();ctx.restore();
         });
       }
 
       useEffect(()=>{
-        if(phase!=='playing')return;
+        if(phase!=='play')return;
         let last=0;
-        function loop(t){
-          if(phaseRef.current!=='playing')return;
-          if(t-last>=16){last=t;gameUpdate();gameDraw();}
+        const loop=(t)=>{
+          if(phsRef.current!=='play')return;
+          if(t-last>=16){last=t;update();draw();}
           rafRef.current=requestAnimationFrame(loop);
-        }
+        };
         rafRef.current=requestAnimationFrame(loop);
-        return()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);};
+        return()=>{cancelAnimationFrame(rafRef.current);};
       },[phase]);
-
-      useEffect(()=>{gameDraw();},[]);
+      useEffect(()=>{draw();},[]);
 
       return (
         <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
-             style={{ height:'100dvh', background:'radial-gradient(circle at 30% 10%,#0a3060 0%,#041018 60%)', position:'relative' }}>
-          <div className="blob" style={{ width:200,height:200,background:'#1155aa',top:-60,left:-50 }}/>
-          <div className="blob" style={{ width:160,height:160,background:'#ffd700',bottom:80,right:-40,animationDelay:'4s' }}/>
+             style={{height:'100dvh',background:'radial-gradient(circle at 30% 10%,#0a3060 0%,#041018 60%)',position:'relative'}}>
+          <div className="blob" style={{width:200,height:200,background:'#1155aa',top:-60,left:-50}}/>
+          <div className="blob" style={{width:160,height:160,background:'#ffd700',bottom:80,right:-40,animationDelay:'4s'}}/>
 
-          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{ flexShrink:0 }}>
+          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{flexShrink:0}}>
             <div className="flex items-center gap-3">
-              <button onClick={onBack} style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.58rem', color:'#666', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.03)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer' }}>← MENU</button>
+              <button onClick={onBack} style={{fontFamily:'Orbitron,sans-serif',fontSize:'.58rem',color:'#666',border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',borderRadius:'8px',padding:'4px 10px',cursor:'pointer'}}>← MENU</button>
               <div>
-                <h1 className="font-black tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.1rem', color:'#ffd700', textShadow:'0 0 10px #ffd700' }}>CANON BREAK</h1>
+                <h1 className="font-black tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.1rem',color:'#ffd700',textShadow:'0 0 10px #ffd700'}}>CANON BREAK</h1>
                 <div className="flex items-center gap-1 mt-0.5">
-                  {[0,1,2,3,4].map(i=><span key={i} style={{ fontSize:'.9rem', opacity:i<uiLives?1:.15, filter:i<uiLives?'drop-shadow(0 0 5px #ff2244)':'none', transition:'opacity .3s' }}>❤️</span>)}
+                  {[0,1,2,3,4].map(i=><span key={i} style={{fontSize:'.9rem',opacity:i<uiHp?1:.15,filter:i<uiHp?'drop-shadow(0 0 5px #ff2244)':'none',transition:'opacity .3s'}}>❤️</span>)}
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <p className="score-text font-black" style={{ fontSize:'1.6rem', lineHeight:1 }}>{uiScore}</p>
-              <div style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.55rem', fontWeight:900, color:'#ffd700' }}>NV {uiLevel} · {levelName}</div>
+              <p className="score-text font-black" style={{fontSize:'1.6rem',lineHeight:1}}>{uiSc}</p>
+              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',fontWeight:900,color:'#ffd700'}}>NV {uiLv} · {LNAMES[uiLv-1]||''}</div>
             </div>
           </div>
 
-          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{ flex:1, minHeight:0 }}>
-            <canvas ref={canvasRef} width={GW} height={GH} style={{ width:'100%', height:'100%', display:'block', touchAction:'none' }}/>
+          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{flex:1,minHeight:0}}>
+            <canvas ref={cvsRef} width={GW} height={GH} style={{width:'100%',height:'100%',display:'block',touchAction:'none'}}/>
             {phase==='menu'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.92)', backdropFilter:'blur(4px)' }}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.92)',backdropFilter:'blur(4px)'}}>
                 <p className="text-5xl mb-3">💣</p>
-                <h2 className="font-black mb-2 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.8rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>CANON BREAK</h2>
-                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs avec le boulet !<br/>5 niveaux aux designs variés !</p>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{ fontSize:'.65rem', fontFamily:'Orbitron,sans-serif' }}>
-                  <span style={{ color:'#00ff88' }}>⚓ Barque large</span><span style={{ color:'#aa44ff' }}>💣 Double boulet</span>
-                  <span style={{ color:'#22d3ee' }}>🌊 Ralentit</span><span style={{ color:'#ff2244' }}>❤️ +1 vie</span>
-                  <span style={{ color:'#ff4444' }}>☠️ Rétrécit</span>
+                <h2 className="font-black mb-2 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.8rem',color:'#ffd700',textShadow:'0 0 20px #ffd700'}}>CANON BREAK</h2>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs !<br/>5 niveaux — Grille · Pyramide · Damier · Vagues · Boss</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{fontSize:'.65rem',fontFamily:'Orbitron,sans-serif'}}>
+                  <span style={{color:'#00ff88'}}>⚓ Barque large</span><span style={{color:'#aa44ff'}}>💣 Double boulet</span>
+                  <span style={{color:'#22d3ee'}}>🌊 Ralentit</span><span style={{color:'#ff2244'}}>❤️ +1 vie</span>
                 </div>
-                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>JOUER ▶</button>
+                <button onClick={newGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>JOUER ▶</button>
               </div>
             )}
-            {phase==='levelup'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.94)', backdropFilter:'blur(4px)' }}>
+            {phase==='next'&&(
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.94)',backdropFilter:'blur(4px)'}}>
                 <p className="text-5xl mb-2">🏅</p>
-                <h2 className="font-black mb-1 tracking-widest" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.5rem', color:'#ffd700', textShadow:'0 0 20px #ffd700' }}>NIVEAU TERMINÉ !</h2>
-                <p className="text-slate-300 text-sm mb-1">Prochain niveau :</p>
-                <p className="font-black mb-3" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1rem', color:'#00ff88' }}>{LEVEL_NAMES[uiLevel]||''}</p>
-                <p className="score-text font-black mb-4" style={{ fontSize:'2rem' }}>{uiScore}</p>
-                <button onClick={()=>{const g=gRef.current;startLevel(g.level+1,g.score,g.lives);}} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>CONTINUER ▶</button>
+                <h2 className="font-black mb-1 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.5rem',color:'#ffd700',textShadow:'0 0 20px #ffd700'}}>NIVEAU TERMINÉ !</h2>
+                <p className="font-black mb-3" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1rem',color:'#00ff88'}}>{LNAMES[uiLv]||'BOSS'}</p>
+                <p className="score-text font-black mb-4" style={{fontSize:'2rem'}}>{uiSc}</p>
+                <button onClick={()=>{const g=gRef.current;startLevel(g.lv+1,g.score,g.lives);}} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>CONTINUER ▶</button>
               </div>
             )}
             {phase==='over'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background:'rgba(4,16,24,.94)', backdropFilter:'blur(4px)' }}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.94)',backdropFilter:'blur(4px)'}}>
                 <p className="text-4xl mb-3">{won?'🏆':'💥'}</p>
-                <h2 className="font-black mb-2" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'1.9rem', color:won?'#ffd700':'#ff4444', textShadow:`0 0 20px ${won?'#ffd700':'#ff4444'}` }}>{won?'VICTOIRE !':'NAUFRAGE !'}</h2>
-                <p className="score-text font-black mb-4" style={{ fontSize:'2.4rem' }}>{uiScore}</p>
-                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{ background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 30px #ffd700', fontFamily:'Orbitron,sans-serif' }}>REJOUER ▶</button>
+                <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:won?'#ffd700':'#ff4444',textShadow:`0 0 20px ${won?'#ffd700':'#ff4444'}`}}>{won?'VICTOIRE !':'NAUFRAGE !'}</h2>
+                <p className="score-text font-black mb-4" style={{fontSize:'2.4rem'}}>{uiSc}</p>
+                <button onClick={newGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
               </div>
             )}
           </div>
 
-          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid grid-cols-2 gap-2" style={{ flexShrink:0 }}>
+          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid grid-cols-2 gap-2" style={{flexShrink:0}}>
             <button onPointerDown={()=>{movRef.current=-1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=-1;}} onTouchEnd={()=>{movRef.current=0;}}
-              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 20px rgba(255,215,0,.5)', userSelect:'none' }}>◄◄</button>
+              className="rounded-2xl text-2xl text-white font-black" style={{padding:'14px 0',background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 20px rgba(255,215,0,.5)',userSelect:'none'}}>◄◄</button>
             <button onPointerDown={()=>{movRef.current=1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=1;}} onTouchEnd={()=>{movRef.current=0;}}
-              className="rounded-2xl text-2xl text-white font-black" style={{ padding:'14px 0', background:'linear-gradient(135deg,#ffd700,#ff8800)', boxShadow:'0 0 20px rgba(255,215,0,.5)', userSelect:'none' }}>►►</button>
+              className="rounded-2xl text-2xl text-white font-black" style={{padding:'14px 0',background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 20px rgba(255,215,0,.5)',userSelect:'none'}}>►►</button>
           </div>
         </div>
       );
