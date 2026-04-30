@@ -1666,281 +1666,451 @@
       );
     }
 
-        // ── Fuite Féline ─────────────────────────────────────────────────────────
-    function ChatTraque({ onBack }) {
-      const GW=360,GH=456,TILE=24,COLS=15,ROWS=19,INVINC=120;
-      const CAT_SPD=2.5;
+        // ── Fuite Féline ──
+    const FF_TILE=24,FF_COLS=15,FF_ROWS=19,FF_TROW=9,FF_INVINC=150,FF_CAT_SPD=2.5;
+    const FF_GHOST=['#ff2020','#ff88ff','#00eeff','#ffaa00'];
+    const FF_DOG_SPD=1.8;
 
-      const cvsRef=useRef(null),gRef=useRef(null),rafRef=useRef(null);
-      const dirRef=useRef([0,0]);
-      const phsRef=useRef('menu');
-      const [phase,setPhase]=useState('menu');
-      const [uiTime,setUiTime]=useState(0);
-      const [uiLives,setUiLives]=useState(3);
-      const [best,setBest]=useState(()=>+(localStorage.getItem('ft_best')||0));
-
-      function tp(t){return t*TILE+TILE/2;}
-
-      function genMaze(){
-        const m=Array.from({length:ROWS},()=>new Array(COLS).fill(0));
-        const stk=[[1,1]];m[1][1]=1;
-        while(stk.length){
-          const[cx,cy]=stk[stk.length-1];
-          const nb=[];
-          for(const[dx,dy] of [[0,-2],[0,2],[-2,0],[2,0]]){
-            const nx=cx+dx,ny=cy+dy;
-            if(nx>0&&nx<COLS-1&&ny>0&&ny<ROWS-1&&m[ny][nx]===0)nb.push([nx,ny,dx,dy]);
-          }
-          if(nb.length){const[nx,ny,dx,dy]=nb[Math.floor(Math.random()*nb.length)];m[cy+dy/2][cx+dx/2]=1;m[ny][nx]=1;stk.push([nx,ny]);}
-          else stk.pop();
-        }
-        // Boucles supplémentaires : ouvre ~12% des murs horizontaux internes
-        for(let y=2;y<ROWS-1;y+=2)
-          for(let x=1;x<COLS-1;x+=2)
-            if(m[y][x]===0&&Math.random()<0.12)m[y][x]=1;
-        return m;
-      }
-
-      function bfs(maze,sx,sy,gx,gy){
-        if(sx===gx&&sy===gy)return[];
-        const q=[[sx,sy]],prev=new Map([[`${sx},${sy}`,null]]);
-        while(q.length){
-          const[cx,cy]=q.shift();
-          if(cx===gx&&cy===gy)break;
-          for(const[dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
-            const nx=cx+dx,ny=cy+dy,k=`${nx},${ny}`;
-            if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&maze[ny][nx]===1&&!prev.has(k)){prev.set(k,[cx,cy]);q.push([nx,ny]);}
+    function ffGenMaze(){
+      // init all walls
+      const m=Array.from({length:FF_ROWS},()=>Array(FF_COLS).fill(0));
+      // DFS carve
+      function carve(x,y){
+        m[y][x]=1;
+        const dirs=[[0,2],[0,-2],[2,0],[-2,0]].sort(()=>Math.random()-0.5);
+        for(const[dx,dy] of dirs){
+          const nx=x+dx,ny=y+dy;
+          if(nx>0&&nx<FF_COLS-1&&ny>0&&ny<FF_ROWS-1&&m[ny][nx]===0){
+            m[y+dy/2][x+dx/2]=1;
+            carve(nx,ny);
           }
         }
-        if(!prev.has(`${gx},${gy}`))return[];
-        const path=[];let cur=[gx,gy];
-        while(cur&&!(cur[0]===sx&&cur[1]===sy)){path.unshift([...cur]);cur=prev.get(`${cur[0]},${cur[1]}`);}
-        return path;
+      }
+      carve(1,1);
+      // Braid: remove dead ends
+      let changed=true;
+      while(changed){
+        changed=false;
+        for(let y=1;y<FF_ROWS-1;y++) for(let x=1;x<FF_COLS-1;x++){
+          if(m[y][x]!==1) continue;
+          const openNeighbors=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>{
+            const nx=x+dx,ny=y+dy;
+            return nx>=0&&nx<FF_COLS&&ny>=0&&ny<FF_ROWS&&m[ny][nx]===1;
+          });
+          if(openNeighbors.length!==1) continue; // not a dead end
+          // find candidate walls to knock down
+          const cands=[];
+          for(const[dx,dy] of [[0,2],[0,-2],[2,0],[-2,0]]){
+            const nx=x+dx,ny=y+dy,wx=x+dx/2,wy=y+dy/2;
+            if(nx>0&&nx<FF_COLS-1&&ny>0&&ny<FF_ROWS-1&&m[ny][nx]===1&&m[wy][wx]===0)
+              cands.push([wx,wy]);
+          }
+          if(cands.length){
+            const[wx,wy]=cands[Math.floor(Math.random()*cands.length)];
+            m[wy][wx]=1;
+            changed=true;
+          }
+        }
+      }
+      // Pac-Man tunnels at TROW
+      m[FF_TROW][0]=1; m[FF_TROW][FF_COLS-1]=1;
+      return m;
+    }
+
+    function ffBFS(maze,sx,sy,tx,ty){
+      if(sx===tx&&sy===ty) return null;
+      const dist=Array.from({length:FF_ROWS},()=>Array(FF_COLS).fill(-1));
+      const prev=Array.from({length:FF_ROWS},()=>Array(FF_COLS).fill(null));
+      dist[sy][sx]=0;
+      const q=[[sx,sy]];
+      while(q.length){
+        const[cx,cy]=q.shift();
+        for(const[dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+          let nx=cx+dx,ny=cy+dy;
+          // tunnel wrap
+          if(nx<0&&cy===FF_TROW) nx=FF_COLS-1;
+          else if(nx>=FF_COLS&&cy===FF_TROW) nx=0;
+          if(nx<0||nx>=FF_COLS||ny<0||ny>=FF_ROWS) continue;
+          if(maze[ny][nx]!==1||dist[ny][nx]!==-1) continue;
+          dist[ny][nx]=dist[cy][cx]+1;
+          prev[ny][nx]=[cx,cy];
+          if(nx===tx&&ny===ty){
+            // reconstruct first step
+            let cur=[tx,ty];
+            while(prev[cur[1]][cur[0]]&&(prev[cur[1]][cur[0]][0]!==sx||prev[cur[1]][cur[0]][1]!==sy))
+              cur=prev[cur[1]][cur[0]];
+            return{dx:cur[0]-sx,dy:cur[1]-sy};
+          }
+          q.push([nx,ny]);
+        }
+      }
+      return null;
+    }
+
+    function ChatTraque({onBack}){
+      const cvRef=React.useRef(null);
+      const st=React.useRef(null);
+      const rafRef=React.useRef(null);
+      const[over,setOver]=React.useState(null);
+      const[best,setBest]=React.useState(()=>parseInt(localStorage.getItem('ff_best')||'0'));
+
+      function initState(){
+        const maze=ffGenMaze();
+        // dots on all path tiles except cat start
+        const dots=Array.from({length:FF_ROWS},(_,y)=>Array.from({length:FF_COLS},(_,x)=>{
+          if(maze[y][x]!==1) return false;
+          if(x===1&&y===1) return false;
+          return true;
+        }));
+        // power stars at 4 corners (inner)
+        const powers=new Set(['13,1','1,17','13,17','1,1']);
+        // remove cat start from powers
+        powers.delete('1,1');
+        // place power dots only on path tiles
+        const pwSet=new Set();
+        for(const k of powers){
+          const[px,py]=k.split(',').map(Number);
+          if(maze[py][px]===1) pwSet.add(k);
+        }
+        return{
+          maze,dots,pwSet,
+          score:0,
+          cat:{x:1,y:1,px:1*FF_TILE+FF_TILE/2,py:1*FF_TILE+FF_TILE/2,dir:null,nextDir:null},
+          dogs:[
+            {x:13,y:1,px:13*FF_TILE+FF_TILE/2,py:1*FF_TILE+FF_TILE/2,timer:0,scatter:120,clr:FF_GHOST[0]},
+            {x:1,y:17,px:1*FF_TILE+FF_TILE/2,py:17*FF_TILE+FF_TILE/2,timer:0,scatter:80,clr:FF_GHOST[1]},
+            {x:13,y:17,px:13*FF_TILE+FF_TILE/2,py:17*FF_TILE+FF_TILE/2,timer:0,scatter:100,clr:FF_GHOST[2]},
+            {x:7,y:9,px:7*FF_TILE+FF_TILE/2,py:9*FF_TILE+FF_TILE/2,timer:0,scatter:60,clr:FF_GHOST[3]},
+          ],
+          invinc:0,
+          tick:0,
+          lives:3,
+          running:false,
+          started:false,
+        };
       }
 
-      function mkDog(tx,ty,spd){
-        return{tx,ty,x:tp(tx),y:tp(ty),targetX:tp(tx),targetY:tp(ty),moving:false,path:[],ptimer:30+Math.floor(Math.random()*20),speed:spd};
-      }
+      React.useEffect(()=>{
+        st.current=initState();
+        return()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);};
+      },[]);
 
       function startGame(){
-        const maze=genMaze();
-        const cat={tx:1,ty:1,x:tp(1),y:tp(1),targetX:tp(1),targetY:tp(1),moving:false,invinc:INVINC};
-        gRef.current={maze,cat,dogs:[mkDog(13,17,1.1)],ticks:0,lives:3,nextSpawn:15*60,dogCount:1,flash:0};
-        phsRef.current='play';setPhase('play');setUiTime(0);setUiLives(3);dirRef.current=[0,0];
+        st.current=initState();
+        st.current.running=true;
+        st.current.started=true;
+        setOver(null);
+        loop();
+      }
+
+      function loop(){
+        rafRef.current=requestAnimationFrame(()=>{
+          if(!st.current||!st.current.running){draw();return;}
+          update();
+          draw();
+          loop();
+        });
+      }
+
+      function canMove(maze,tx,ty){
+        if(ty<0||ty>=FF_ROWS) return false;
+        let mx=tx;
+        if(mx<0) mx=FF_COLS-1;
+        if(mx>=FF_COLS) mx=0;
+        return maze[ty][mx]===1;
       }
 
       function update(){
-        const g=gRef.current;if(!g)return;
-        g.ticks++;
-        if(g.ticks%60===0)setUiTime(Math.floor(g.ticks/60));
+        const s=st.current;
+        s.tick++;
+        s.invinc=Math.max(0,s.invinc-1);
 
-        // Nouveau chien toutes les 15 secondes (max 4)
-        if(g.dogCount<4&&g.ticks>=g.nextSpawn){
-          const spawns=[[1,17,1.25],[13,1,1.4],[7,17,1.55]];
-          const sp=spawns[g.dogCount-1];
-          if(sp){g.dogs.push(mkDog(sp[0],sp[1],sp[2]));g.flash=25;}
-          g.dogCount++;g.nextSpawn+=15*60;
-        }
-        if(g.flash>0)g.flash--;
+        // move cat
+        const cat=s.cat;
+        const T=FF_TILE;
+        // snap to grid center detection
+        const catSnapX=Math.abs(cat.px-(cat.x*T+T/2))<FF_CAT_SPD+1;
+        const catSnapY=Math.abs(cat.py-(cat.y*T+T/2))<FF_CAT_SPD+1;
 
-        // Mouvement du chat
-        const cat=g.cat;
-        if(cat.invinc>0)cat.invinc--;
-        if(!cat.moving){
-          const[dx,dy]=dirRef.current;
-          if(dx||dy){
-            const ntx=cat.tx+dx,nty=cat.ty+dy;
-            if(ntx>=0&&ntx<COLS&&nty>=0&&nty<ROWS&&g.maze[nty][ntx]===1){
-              cat.tx=ntx;cat.ty=nty;cat.targetX=tp(ntx);cat.targetY=tp(nty);cat.moving=true;
+        if(catSnapX&&catSnapY){
+          cat.px=cat.x*T+T/2; cat.py=cat.y*T+T/2;
+          // try next dir
+          if(cat.nextDir){
+            const[dx,dy]=cat.nextDir;
+            const nx=cat.x+dx,ny=cat.y+dy;
+            if(canMove(s.maze,nx,ny)){
+              cat.dir=cat.nextDir;
+              cat.nextDir=null;
             }
           }
-        }else{
-          const dx=cat.targetX-cat.x,dy=cat.targetY-cat.y,d=Math.hypot(dx,dy);
-          if(d<=CAT_SPD){cat.x=cat.targetX;cat.y=cat.targetY;cat.moving=false;}
-          else{cat.x+=dx/d*CAT_SPD;cat.y+=dy/d*CAT_SPD;}
-        }
-
-        // Déplacement + IA des chiens
-        let caught=false;
-        g.dogs.forEach(dog=>{
-          dog.ptimer--;
-          if(dog.ptimer<=0){
-            dog.ptimer=40+Math.floor(Math.random()*25);
-            if(Math.random()<0.78){
-              dog.path=bfs(g.maze,dog.tx,dog.ty,cat.tx,cat.ty);
-            }else{
-              // Déambulation aléatoire
-              const opts=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>{
-                const nx=dog.tx+dx,ny=dog.ty+dy;
-                return nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&g.maze[ny][nx]===1;
-              });
-              if(opts.length){const o=opts[Math.floor(Math.random()*opts.length)];dog.path=[[dog.tx+o[0],dog.ty+o[1]]];}
+          // move in current dir
+          if(cat.dir){
+            const[dx,dy]=cat.dir;
+            let nx=cat.x+dx,ny=cat.y+dy;
+            if(canMove(s.maze,nx,ny)){
+              // tunnel wrap
+              if(nx<0) nx=FF_COLS-1;
+              else if(nx>=FF_COLS) nx=0;
+              cat.x=nx; cat.y=ny;
+            } else {
+              cat.dir=null;
             }
           }
-          if(!dog.moving&&dog.path.length>0){
-            const[ntx,nty]=dog.path.shift();
-            dog.tx=ntx;dog.ty=nty;dog.targetX=tp(ntx);dog.targetY=tp(nty);dog.moving=true;
+        } else {
+          // continue moving toward current tile center
+          if(cat.dir){
+            const[dx,dy]=cat.dir;
+            cat.px+=dx*FF_CAT_SPD; cat.py+=dy*FF_CAT_SPD;
           }
-          if(dog.moving){
-            const dx=dog.targetX-dog.x,dy=dog.targetY-dog.y,d=Math.hypot(dx,dy);
-            if(d<=dog.speed){dog.x=dog.targetX;dog.y=dog.targetY;dog.moving=false;}
-            else{dog.x+=dx/d*dog.speed;dog.y+=dy/d*dog.speed;}
-          }
-          // Collision chat/chien
-          if(!caught&&cat.invinc===0&&Math.hypot(dog.x-cat.x,dog.y-cat.y)<TILE*0.7){
-            caught=true;
-            cat.invinc=INVINC;
-            g.lives--;setUiLives(g.lives);playDie();
-            if(g.lives<=0){
-              const secs=Math.floor(g.ticks/60);setUiTime(secs);
-              if(secs>+(localStorage.getItem('ft_best')||0)){localStorage.setItem('ft_best',String(secs));setBest(secs);}
-              phsRef.current='over';setPhase('over');
-            }else{
-              cat.tx=1;cat.ty=1;cat.x=tp(1);cat.y=tp(1);cat.targetX=tp(1);cat.targetY=tp(1);cat.moving=false;
-              g.dogs.forEach(d=>{d.path=[];d.ptimer=90;});
-            }
-          }
-        });
-      }
+        }
 
-      function draw(){
-        const canvas=cvsRef.current;if(!canvas)return;
-        const ctx=canvas.getContext('2d'),g=gRef.current;
-        ctx.fillStyle='#030318';ctx.fillRect(0,0,GW,GH);
-        if(!g)return;
-        // Tuiles du labyrinthe
-        for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-          if(g.maze[y][x]===0){
-            ctx.fillStyle='#161650';ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
-            ctx.fillStyle='rgba(60,60,180,0.18)';ctx.fillRect(x*TILE+2,y*TILE+2,TILE-4,TILE-4);
-          }else{
-            ctx.fillStyle='#07071c';ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+        // collect dots
+        const dk=`${cat.x},${cat.y}`;
+        if(s.dots[cat.y]&&s.dots[cat.y][cat.x]){
+          s.dots[cat.y][cat.x]=false;
+          s.score+=s.pwSet.has(dk)?10:1;
+          s.pwSet.delete(dk);
+        }
+
+        // move dogs
+        for(const dog of s.dogs){
+          dog.timer--;
+          if(dog.timer>0) continue;
+          dog.timer=Math.round(T/FF_DOG_SPD);
+          // BFS toward cat (or scatter)
+          let tx,ty;
+          dog.scatter--;
+          if(dog.scatter>0&&(s.tick%300<150)){
+            // wander randomly
+            const moves=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>canMove(s.maze,dog.x+dx,dog.y+dy));
+            if(moves.length){const[dx,dy]=moves[Math.floor(Math.random()*moves.length)];dog.x+=dx;dog.y+=dy;}
+            continue;
+          }
+          const step=ffBFS(s.maze,dog.x,dog.y,cat.x,cat.y);
+          if(step){
+            let nx=dog.x+step.dx,ny=dog.y+step.dy;
+            if(nx<0&&dog.y===FF_TROW) nx=FF_COLS-1;
+            else if(nx>=FF_COLS&&dog.y===FF_TROW) nx=0;
+            dog.x=nx; dog.y=ny;
           }
         }
-        // Grille légère sur les couloirs
-        ctx.strokeStyle='rgba(40,40,120,0.35)';ctx.lineWidth=0.4;
-        for(let y=0;y<=ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*TILE);ctx.lineTo(GW,y*TILE);ctx.stroke();}
-        for(let x=0;x<=COLS;x++){ctx.beginPath();ctx.moveTo(x*TILE,0);ctx.lineTo(x*TILE,GH);ctx.stroke();}
-        // Vignette danger (rouge quand un chien est proche)
-        const minD=g.dogs.reduce((m,d)=>Math.min(m,Math.hypot(d.x-g.cat.x,d.y-g.cat.y)),9999);
-        if(minD<TILE*5){
-          const a=(1-minD/(TILE*5))*0.32;
-          const vg=ctx.createRadialGradient(GW/2,GH/2,GH*0.2,GW/2,GH/2,GH*0.75);
-          vg.addColorStop(0,'rgba(220,0,0,0)');vg.addColorStop(1,`rgba(220,0,0,${a})`);
-          ctx.fillStyle=vg;ctx.fillRect(0,0,GW,GH);
-        }
-        // Chiens
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        g.dogs.forEach(dog=>{
-          ctx.save();ctx.shadowColor='#ff4400';ctx.shadowBlur=16;
-          ctx.font=`${TILE+2}px serif`;ctx.fillText('🐕',dog.x,dog.y+2);
-          ctx.restore();
-        });
-        // Chat (clignote pendant l'invincibilité)
-        const cat=g.cat;
-        if(cat.invinc===0||Math.floor(cat.invinc/8)%2===0){
-          ctx.save();ctx.shadowColor='#44ddff';ctx.shadowBlur=16;
-          ctx.font=`${TILE+2}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-          ctx.fillText('🐱',cat.x,cat.y+2);
-          ctx.restore();
-        }
-        // Flash d'alerte (nouveau chien)
-        if(g.flash>0){
-          ctx.fillStyle=`rgba(255,80,0,${g.flash/25*0.4})`;ctx.fillRect(0,0,GW,GH);
-          if(g.flash>12){
-            ctx.save();ctx.font='bold 15px Orbitron,sans-serif';ctx.textAlign='center';ctx.fillStyle='#ffbb44';
-            ctx.shadowColor='#ff6600';ctx.shadowBlur=18;
-            ctx.fillText('🐕  UN NOUVEAU CHIEN !',GW/2,GH/2);ctx.restore();
+
+        // collision
+        if(s.invinc===0){
+          for(const dog of s.dogs){
+            if(dog.x===cat.x&&dog.y===cat.y){
+              s.lives--;
+              s.invinc=FF_INVINC;
+              if(s.lives<=0){
+                s.running=false;
+                const finalScore=s.score;
+                if(finalScore>parseInt(localStorage.getItem('ff_best')||'0')){
+                  localStorage.setItem('ff_best',String(finalScore));
+                  setBest(finalScore);
+                }
+                setOver({score:finalScore,best:Math.max(finalScore,best)});
+              }
+              break;
+            }
           }
         }
       }
 
-      useEffect(()=>{
-        if(phase!=='play')return;
-        let last=0;
-        const loop=(t)=>{
-          if(phsRef.current!=='play')return;
-          try{if(t-last>=16){last=t;update();draw();}}catch(e){console.error('FF:',e);try{draw();}catch(_){}}
-          rafRef.current=requestAnimationFrame(loop);
-        };
-        rafRef.current=requestAnimationFrame(loop);
-        return()=>{cancelAnimationFrame(rafRef.current);};
-      },[phase]);
-      useEffect(()=>{draw();},[]);
+      function draw(){
+        const cv=cvRef.current; if(!cv) return;
+        const ctx=cv.getContext('2d');
+        const s=st.current; if(!s) return;
+        const T=FF_TILE;
+        const W=FF_COLS*T, H=FF_ROWS*T;
+        ctx.fillStyle='#0a0a1a';
+        ctx.fillRect(0,0,W,H);
 
-      const btnStyle={background:'linear-gradient(135deg,#5b21b6,#1d4ed8)',boxShadow:'0 0 12px rgba(109,40,217,.55)',borderRadius:'14px',border:'none',color:'white',fontSize:'1.3rem',fontWeight:900,cursor:'pointer',userSelect:'none',touchAction:'none',display:'flex',alignItems:'center',justifyContent:'center'};
-      function dBtn(d,lbl){return{onPointerDown:(e)=>{e.preventDefault();dirRef.current=d;},onPointerUp:()=>{dirRef.current=[0,0];},onPointerLeave:()=>{dirRef.current=[0,0];},onTouchStart:(e)=>{e.preventDefault();dirRef.current=d;},onTouchEnd:()=>{dirRef.current=[0,0];},style:btnStyle,children:lbl};}
+        // draw maze
+        for(let y=0;y<FF_ROWS;y++) for(let x=0;x<FF_COLS;x++){
+          if(s.maze[y][x]===0){
+            ctx.fillStyle='#0d1b4b';
+            ctx.fillRect(x*T,y*T,T,T);
+            ctx.strokeStyle='#1a3aff';
+            ctx.lineWidth=1;
+            ctx.strokeRect(x*T+0.5,y*T+0.5,T-1,T-1);
+          }
+        }
 
-      return (
-        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
-             style={{height:'100dvh',background:'radial-gradient(circle at 50% 15%,#0d0050 0%,#030310 65%)',position:'relative'}}>
-          <div className="blob" style={{width:200,height:200,background:'#7700ff',top:-60,left:-50}}/>
-          <div className="blob" style={{width:150,height:150,background:'#003bff',bottom:60,right:-30,animationDelay:'5s'}}/>
+        // dots
+        for(let y=0;y<FF_ROWS;y++) for(let x=0;x<FF_COLS;x++){
+          if(!s.dots[y]||!s.dots[y][x]) continue;
+          const dk=`${x},${y}`;
+          const cx=x*T+T/2, cy=y*T+T/2;
+          if(s.pwSet&&s.pwSet.has(dk)){
+            // power star
+            ctx.save();
+            ctx.fillStyle='#ffd700';
+            ctx.shadowColor='#ffd700';
+            ctx.shadowBlur=8;
+            ctx.beginPath();
+            for(let i=0;i<5;i++){
+              const a=Math.PI/2+i*Math.PI*2/5-Math.PI/5;
+              const a2=Math.PI/2+i*Math.PI*2/5+Math.PI/5;
+              if(i===0) ctx.moveTo(cx+6*Math.cos(a-Math.PI*2/5+Math.PI/5),cy-6*Math.sin(a-Math.PI*2/5+Math.PI/5));
+              ctx.lineTo(cx+6*Math.cos(a),cy-6*Math.sin(a));
+              ctx.lineTo(cx+2.5*Math.cos(a2),cy-2.5*Math.sin(a2));
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.restore();
+          } else {
+            // fish dot
+            ctx.save();
+            ctx.fillStyle='#00e5ff';
+            ctx.shadowColor='#00e5ff';
+            ctx.shadowBlur=4;
+            // small fish shape
+            ctx.beginPath();
+            ctx.ellipse(cx,cy,3,2,0,0,Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
 
-          {/* En-tête */}
-          <div className="w-full max-w-full flex items-center justify-between mb-1 z-10" style={{flexShrink:0}}>
-            <div className="flex items-center gap-3">
-              <button onClick={onBack} style={{fontFamily:'Orbitron,sans-serif',fontSize:'.58rem',color:'#666',border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',borderRadius:'8px',padding:'4px 10px',cursor:'pointer'}}>← MENU</button>
-              <div>
-                <h1 className="font-black tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1rem',color:'#bb88ff',textShadow:'0 0 10px #7700ff'}}>FUITE FÉLINE</h1>
-                <div className="flex items-center gap-0.5 mt-0.5">
-                  {[0,1,2].map(i=><span key={i} style={{fontSize:'.85rem',opacity:i<uiLives?1:.15,filter:i<uiLives?'drop-shadow(0 0 5px #ff2244)':'none',transition:'opacity .3s'}}>❤️</span>)}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="font-black" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.6rem',lineHeight:1,color:'#ffd700',textShadow:'0 0 12px #ffd700'}}>{uiTime}<span style={{fontSize:'.7rem'}}>s</span></p>
-              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.48rem',color:'#666'}}>RECORD : {best}s</div>
-            </div>
+        // dogs
+        for(const dog of s.dogs){
+          const px=dog.x*T+T/2, py=dog.y*T+T/2;
+          const r=T/2-2;
+          ctx.save();
+          // ghost body
+          ctx.fillStyle=dog.clr;
+          ctx.shadowColor=dog.clr;
+          ctx.shadowBlur=10;
+          ctx.beginPath();
+          ctx.arc(px,py-2,r,Math.PI,0);
+          // wavy bottom
+          const segs=4;
+          for(let i=0;i<=segs;i++){
+            const fx=px-r+i*(2*r/segs);
+            const fy=(i%2===0)?py+r-2:py+r-6;
+            ctx.lineTo(fx,fy);
+          }
+          ctx.closePath();
+          ctx.fill();
+          // eyes
+          ctx.fillStyle='#fff';
+          ctx.beginPath(); ctx.arc(px-3,py-4,2.5,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px+3,py-4,2.5,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#222';
+          ctx.beginPath(); ctx.arc(px-2.5,py-4,1.2,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px+3.5,py-4,1.2,0,Math.PI*2); ctx.fill();
+          ctx.restore();
+        }
+
+        // cat
+        {
+          const cat=s.cat;
+          const px=cat.px, py=cat.py;
+          ctx.save();
+          const flash=s.invinc>0&&Math.floor(s.invinc/5)%2===0;
+          if(!flash){
+            ctx.shadowColor='#ffe600';
+            ctx.shadowBlur=16;
+            // body
+            ctx.fillStyle='#ffcc00';
+            ctx.beginPath(); ctx.arc(px,py,T/2-2,0,Math.PI*2); ctx.fill();
+            // ears
+            ctx.fillStyle='#ffaa00';
+            ctx.beginPath(); ctx.moveTo(px-7,py-8); ctx.lineTo(px-3,py-14); ctx.lineTo(px-1,py-8); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(px+7,py-8); ctx.lineTo(px+3,py-14); ctx.lineTo(px+1,py-8); ctx.closePath(); ctx.fill();
+            // eyes
+            ctx.fillStyle='#1a1a2e';
+            ctx.beginPath(); ctx.ellipse(px-3,py-1,1.5,2.5,0,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(px+3,py-1,1.5,2.5,0,0,Math.PI*2); ctx.fill();
+            // nose
+            ctx.fillStyle='#ff69b4';
+            ctx.beginPath(); ctx.arc(px,py+2,1.5,0,Math.PI*2); ctx.fill();
+            // whiskers
+            ctx.strokeStyle='rgba(255,255,255,0.7)';
+            ctx.lineWidth=0.8;
+            ctx.beginPath(); ctx.moveTo(px-4,py+2); ctx.lineTo(px-10,py); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px-4,py+3); ctx.lineTo(px-10,py+4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px+4,py+2); ctx.lineTo(px+10,py); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(px+4,py+3); ctx.lineTo(px+10,py+4); ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // tunnel indicators
+        ctx.save();
+        ctx.fillStyle='#1a3aff';
+        ctx.font='bold 8px monospace';
+        ctx.textAlign='center';
+        ctx.fillText('◀',4,FF_TROW*T+T/2+3);
+        ctx.fillText('▶',W-4,FF_TROW*T+T/2+3);
+        ctx.restore();
+      }
+
+      React.useEffect(()=>{
+        draw();
+      },[]);
+
+      function handleKey(e){
+        const s=st.current; if(!s) return;
+        const map={'ArrowLeft':[-1,0],'ArrowRight':[1,0],'ArrowUp':[0,-1],'ArrowDown':[0,1]};
+        if(map[e.key]){
+          e.preventDefault();
+          s.cat.nextDir=map[e.key];
+          if(!s.started) startGame();
+        }
+      }
+
+      React.useEffect(()=>{
+        window.addEventListener('keydown',handleKey);
+        return()=>window.removeEventListener('keydown',handleKey);
+      },[]);
+
+      const CW=FF_COLS*FF_TILE, CH=FF_ROWS*FF_TILE;
+
+      return(
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',background:'linear-gradient(135deg,#0a0a1a,#0d1b4b)',minHeight:'100vh',padding:'12px',color:'#fff',fontFamily:'monospace'}}>
+          <div style={{width:CW,display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <button onClick={onBack} style={{background:'none',border:'1px solid #1a3aff',color:'#00eeff',padding:'3px 10px',borderRadius:4,cursor:'pointer',fontSize:12}}>← Menu</button>
+            <span style={{color:'#00eeff',fontSize:13}}>🐟 {st.current?st.current.score:0}</span>
+            <span style={{color:'#ffd700',fontSize:13}}>Best: {best}</span>
           </div>
-
-          {/* Canvas */}
-          <div className="relative w-full rounded-2xl overflow-hidden z-10" style={{flex:1,minHeight:0}}>
-            <canvas ref={cvsRef} width={GW} height={GH} style={{width:'100%',height:'100%',display:'block',touchAction:'none'}}/>
-            {phase==='menu'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(2,2,18,.93)',backdropFilter:'blur(4px)'}}>
-                <p className="text-5xl mb-2">🐱</p>
-                <h2 className="font-black mb-1 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.55rem',color:'#bb88ff',textShadow:'0 0 20px #7700ff'}}>FUITE FÉLINE</h2>
-                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Guide le chat dans le labyrinthe.<br/>Échappe aux chiens le plus longtemps !</p>
-                <div className="flex gap-6 mb-4 text-center">
-                  <div><span className="text-2xl">🐕</span><br/><span style={{fontSize:'.6rem',color:'#ff9988'}}>Te traque</span></div>
-                  <div><span className="text-2xl">⏱️</span><br/><span style={{fontSize:'.6rem',color:'#ffcc44'}}>+1 chien/15s</span></div>
-                  <div><span className="text-2xl">❤️</span><br/><span style={{fontSize:'.6rem',color:'#ff4466'}}>3 vies</span></div>
-                </div>
-                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#7700ff,#1d4ed8)',boxShadow:'0 0 30px #7700ff',fontFamily:'Orbitron,sans-serif'}}>JOUER ▶</button>
+          <div style={{position:'relative'}}>
+            <canvas ref={cvRef} width={CW} height={CH} style={{display:'block',borderRadius:6,border:'2px solid #1a3aff',boxShadow:'0 0 20px #1a3aff88'}} />
+            {!st.current?.started&&!over&&(
+              <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,26,0.82)',borderRadius:6}}>
+                <div style={{fontSize:22,marginBottom:8,color:'#ffcc00',textShadow:'0 0 12px #ffe600'}}>🐱 Fuite Féline</div>
+                <div style={{fontSize:12,color:'#aac',marginBottom:16,textAlign:'center',lineHeight:1.6}}>Échappe aux chiens!<br/>🐟 Fish = 1pt · ⭐ Étoile = 10pt<br/>Tunnels latéraux disponibles</div>
+                <button onClick={startGame} style={{background:'linear-gradient(90deg,#1a3aff,#00eeff)',color:'#fff',border:'none',padding:'8px 24px',borderRadius:6,fontSize:14,cursor:'pointer',fontWeight:'bold'}}>▶ Jouer</button>
+                <div style={{marginTop:10,fontSize:11,color:'#667'}}>Flèches directionnelles</div>
               </div>
             )}
-            {phase==='over'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(2,2,18,.94)',backdropFilter:'blur(4px)'}}>
-                <p className="text-5xl mb-2">😿</p>
-                <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:'#ff4444',textShadow:'0 0 20px #ff0000'}}>CAPTURÉ !</h2>
-                <p style={{fontFamily:'Orbitron,sans-serif',fontSize:'.7rem',color:'#aa88ff',marginBottom:'4px'}}>SURVIE</p>
-                <p className="font-black" style={{fontFamily:'Orbitron,sans-serif',fontSize:'2.6rem',color:'#ffd700',textShadow:'0 0 20px #ffd700',lineHeight:1}}>{uiTime}<span style={{fontSize:'1.2rem'}}>s</span></p>
-                <p style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',color:'#666',margin:'6px 0 20px'}}>RECORD : {best}s</p>
-                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#7700ff,#1d4ed8)',boxShadow:'0 0 30px #7700ff',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
+            {over&&(
+              <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,26,0.88)',borderRadius:6}}>
+                <div style={{fontSize:20,color:'#ff4444',marginBottom:6}}>💀 Attrapé!</div>
+                <div style={{fontSize:15,color:'#fff',marginBottom:4}}>Score: <b style={{color:'#00eeff'}}>{over.score}</b></div>
+                <div style={{fontSize:13,color:'#ffd700',marginBottom:16}}>Meilleur: {over.best}</div>
+                <button onClick={startGame} style={{background:'linear-gradient(90deg,#1a3aff,#00eeff)',color:'#fff',border:'none',padding:'8px 24px',borderRadius:6,fontSize:14,cursor:'pointer',fontWeight:'bold'}}>🔄 Rejouer</button>
+                <button onClick={onBack} style={{marginTop:8,background:'none',border:'1px solid #555',color:'#aaa',padding:'5px 16px',borderRadius:4,cursor:'pointer',fontSize:12}}>Menu</button>
               </div>
             )}
           </div>
-
-          {/* Croix directionnelle */}
-          <div className="z-10 mt-2 mb-1" style={{flexShrink:0}}>
-            <div style={{display:'grid',gridTemplateColumns:'56px 56px 56px',gridTemplateRows:'48px 48px 48px',gap:'5px'}}>
-              <div/>
-              <button {...dBtn([0,-1],'▲')}/>
-              <div/>
-              <button {...dBtn([-1,0],'◄')}/>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem',opacity:.6}}>🐱</div>
-              <button {...dBtn([1,0],'►')}/>
-              <div/>
-              <button {...dBtn([0,1],'▼')}/>
-              <div/>
-            </div>
+          <div style={{marginTop:8,display:'flex',gap:6}}>
+            {st.current&&Array.from({length:st.current.lives||0}).map((_,i)=>(
+              <span key={i} style={{fontSize:16}}>🐱</span>
+            ))}
+          </div>
+          <div style={{marginTop:6,display:'flex',gap:8}}>
+            {[['ArrowUp','▲',[1]],['ArrowLeft','◀',[0]],['ArrowDown','▼',[1]],['ArrowRight','▶',[0]]].map(([k,lbl])=>(
+              <button key={k} onPointerDown={()=>handleKey({key:k,preventDefault:()=>{}})}
+                style={{background:'rgba(26,58,255,0.25)',border:'1px solid #1a3aff',color:'#00eeff',width:38,height:38,borderRadius:6,fontSize:16,cursor:'pointer',touchAction:'manipulation'}}>
+                {lbl}
+              </button>
+            ))}
           </div>
         </div>
       );
     }
 
-    // ── App ───────────────────────────────────────────────────────────────────
+        // ── App ───────────────────────────────────────────────────────────────────
     function App() {
       const [screen, setScreen] = useState('menu');
       if (screen === 'menu')     return <MenuScreen onSelect={setScreen}/>;
