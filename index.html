@@ -209,7 +209,7 @@
 
             <button onClick={() => { getAudio(); onSelect('chattraque'); }}
                     className="game-card flex flex-col items-center py-7 px-3 rounded-2xl border-2"
-                    style={{ '--clr':'#aa55ff', borderColor:'rgba(170,85,255,0.35)', background:'rgba(170,85,255,0.07)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'4.4s' }}>
+                    style={{ '--clr':'#aa55ff', gridColumn:'1 / -1', maxWidth:'50%', margin:'0 auto', width:'100%', borderColor:'rgba(170,85,255,0.35)', background:'rgba(170,85,255,0.07)', animation:'card-glow 2.5s ease-in-out infinite', animationDelay:'4.4s' }}>
               <span className="text-4xl mb-3" style={{ filter:'drop-shadow(0 0 14px #aa55ff)' }}>🐱🐕</span>
               <span style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.88rem', fontWeight:900, color:'#bb88ff', textShadow:'0 0 8px #aa55ff', letterSpacing:'.08em' }}>FUITE FÉLINE</span>
               <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Échappe aux chiens dans le labyrinthe !</span>
@@ -917,7 +917,7 @@
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20"
                    style={{ background:'rgba(4,4,14,.92)', backdropFilter:'blur(6px)' }}>
                 <p className="text-5xl mb-3" style={{ filter:'drop-shadow(0 0 20px #ffd700)' }}>🐶</p>
-                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">CHIEN ROBOT</h2>
+                <h2 className="neon-title text-3xl font-black mb-3 tracking-widest">DOG RUN</h2>
                 <p className="text-slate-400 text-center text-sm mb-5 px-8 leading-relaxed">
                   Saute les obstacles et attrape les os.
                   Les os maudits te font accélérer !
@@ -2066,45 +2066,79 @@
 
       const CW=FF_COLS*FF_TILE, CH=FF_ROWS*FF_TILE;
 
+      const liveCount=st.current?st.current.lives:3;
+      const currentScore=st.current?st.current.score:0;
+
       return(
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',background:'linear-gradient(135deg,#0a0a1a,#0d1b4b)',minHeight:'100vh',padding:'12px',color:'#fff',fontFamily:'monospace'}}>
-          <div style={{width:CW,display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-            <button onClick={onBack} style={{background:'none',border:'1px solid #1a3aff',color:'#00eeff',padding:'3px 10px',borderRadius:4,cursor:'pointer',fontSize:12}}>← Menu</button>
-            <span style={{color:'#00eeff',fontSize:13}}>🐟 {st.current?st.current.score:0}</span>
-            <span style={{color:'#ffd700',fontSize:13}}>Best: {best}</span>
+        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
+             style={{height:'100dvh',background:'radial-gradient(ellipse at 50% -10%,#1e0040 0%,#050510 55%)',position:'relative'}}>
+          <div className="blob" style={{width:200,height:200,background:'#aa55ff',top:-60,left:-50}}/>
+          <div className="blob" style={{width:160,height:160,background:'#00eeff',bottom:80,right:-40,animationDelay:'3.5s'}}/>
+          <div className="blob" style={{width:110,height:110,background:'#ff88ff',top:'40%',left:'60%',animationDelay:'6s'}}/>
+
+          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{flexShrink:0}}>
+            <div className="flex items-center gap-3">
+              <button onClick={onBack} style={{fontFamily:'Orbitron,sans-serif',fontSize:'.58rem',color:'#666',border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',borderRadius:'8px',padding:'4px 10px',cursor:'pointer'}}>← MENU</button>
+              <div>
+                <h1 className="font-black tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.1rem',color:'#bb88ff',textShadow:'0 0 10px #aa55ff'}}>FUITE FÉLINE</h1>
+                <div className="flex items-center gap-1 mt-0.5">
+                  {[0,1,2].map(i=><span key={i} style={{fontSize:'.9rem',opacity:i<liveCount?1:.15,filter:i<liveCount?'drop-shadow(0 0 5px #ff88ff)':'none',transition:'opacity .3s'}}>🐱</span>)}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="score-text font-black" style={{fontSize:'1.6rem',lineHeight:1}}>{currentScore}</p>
+              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',fontWeight:900,color:'#ffd700',letterSpacing:'.05em'}}>BEST: {best}</div>
+            </div>
           </div>
-          <div style={{position:'relative'}}>
-            <canvas ref={cvRef} width={CW} height={CH} style={{display:'block',borderRadius:6,border:'2px solid #1a3aff',boxShadow:'0 0 20px #1a3aff88'}} />
+
+          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{flex:1,minHeight:0,display:'flex',alignItems:'center',justifyContent:'center',background:'#050510'}}>
+            <canvas ref={cvRef} width={CW} height={CH} style={{maxWidth:'100%',maxHeight:'100%',display:'block',touchAction:'none'}}/>
             {!st.current?.started&&!over&&(
-              <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,26,0.82)',borderRadius:6}}>
-                <div style={{fontSize:22,marginBottom:8,color:'#ffcc00',textShadow:'0 0 12px #ffe600'}}>🐱 Fuite Féline</div>
-                <div style={{fontSize:12,color:'#aac',marginBottom:16,textAlign:'center',lineHeight:1.6}}>Échappe aux chiens!<br/>🐟 Fish = 1pt · ⭐ Étoile = 10pt<br/>Tunnels latéraux disponibles</div>
-                <button onClick={startGame} style={{background:'linear-gradient(90deg,#1a3aff,#00eeff)',color:'#fff',border:'none',padding:'8px 24px',borderRadius:6,fontSize:14,cursor:'pointer',fontWeight:'bold'}}>▶ Jouer</button>
-                <div style={{marginTop:10,fontSize:11,color:'#667'}}>Flèches directionnelles</div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,4,14,.92)',backdropFilter:'blur(4px)'}}>
+                <p className="text-5xl mb-3" style={{filter:'drop-shadow(0 0 20px #bb88ff)'}}>🐱</p>
+                <h2 className="font-black mb-2 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.8rem',color:'#bb88ff',textShadow:'0 0 20px #aa55ff'}}>FUITE FÉLINE</h2>
+                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">
+                  Échappe aux chiens dans le labyrinthe !<br/>
+                  🐟 Poisson = 1pt · ⭐ Étoile = 10pt
+                </p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{fontSize:'.65rem',fontFamily:'Orbitron,sans-serif'}}>
+                  <span style={{color:'#00eeff'}}>◀▶ Tunnels Pac-Man</span>
+                  <span style={{color:'#ffd700'}}>3 vies 🐱🐱🐱</span>
+                </div>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#aa55ff,#00eeff)',boxShadow:'0 0 30px #aa55ff',fontFamily:'Orbitron,sans-serif'}}>JOUER ▶</button>
               </div>
             )}
             {over&&(
-              <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,26,0.88)',borderRadius:6}}>
-                <div style={{fontSize:20,color:'#ff4444',marginBottom:6}}>💀 Attrapé!</div>
-                <div style={{fontSize:15,color:'#fff',marginBottom:4}}>Score: <b style={{color:'#00eeff'}}>{over.score}</b></div>
-                <div style={{fontSize:13,color:'#ffd700',marginBottom:16}}>Meilleur: {over.best}</div>
-                <button onClick={startGame} style={{background:'linear-gradient(90deg,#1a3aff,#00eeff)',color:'#fff',border:'none',padding:'8px 24px',borderRadius:6,fontSize:14,cursor:'pointer',fontWeight:'bold'}}>🔄 Rejouer</button>
-                <button onClick={onBack} style={{marginTop:8,background:'none',border:'1px solid #555',color:'#aaa',padding:'5px 16px',borderRadius:4,cursor:'pointer',fontSize:12}}>Menu</button>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,4,14,.94)',backdropFilter:'blur(4px)'}}>
+                <p className="text-4xl mb-3">😿</p>
+                <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:'#ff4444',textShadow:'0 0 20px #ff4444'}}>ATTRAPÉ !</h2>
+                <p className="score-text font-black mb-1" style={{fontSize:'2.4rem'}}>{over.score}</p>
+                <p className="mb-5" style={{fontFamily:'Orbitron,sans-serif',fontSize:'.68rem',letterSpacing:'.08em',color:'#ffd700'}}>MEILLEUR : {over.best}</p>
+                <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#aa55ff,#00eeff)',boxShadow:'0 0 30px #aa55ff',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
               </div>
             )}
           </div>
-          <div style={{marginTop:8,display:'flex',gap:6}}>
-            {st.current&&Array.from({length:st.current.lives||0}).map((_,i)=>(
-              <span key={i} style={{fontSize:16}}>🐱</span>
-            ))}
-          </div>
-          <div style={{marginTop:6,display:'flex',gap:8}}>
-            {[['ArrowUp','▲',[1]],['ArrowLeft','◀',[0]],['ArrowDown','▼',[1]],['ArrowRight','▶',[0]]].map(([k,lbl])=>(
-              <button key={k} onPointerDown={()=>handleKey({key:k,preventDefault:()=>{}})}
-                style={{background:'rgba(26,58,255,0.25)',border:'1px solid #1a3aff',color:'#00eeff',width:38,height:38,borderRadius:6,fontSize:16,cursor:'pointer',touchAction:'manipulation'}}>
-                {lbl}
-              </button>
-            ))}
+
+          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10" style={{flexShrink:0,display:'grid',gridTemplateColumns:'repeat(3,1fr)',gridTemplateRows:'repeat(2,52px)',gap:'6px',maxWidth:'220px',margin:'8px auto 0'}}>
+            <div/>
+            <button className="dpad-btn rounded-xl text-xl text-white font-black"
+              style={{background:'linear-gradient(135deg,#aa55ff,#7700cc)',boxShadow:'0 0 16px rgba(170,85,255,.5)'}}
+              onPointerDown={()=>handleKey({key:'ArrowUp',preventDefault:()=>{}})}
+              onTouchStart={(e)=>{e.preventDefault();handleKey({key:'ArrowUp',preventDefault:()=>{}});}}>▲</button>
+            <div/>
+            <button className="dpad-btn rounded-xl text-xl text-white font-black"
+              style={{background:'linear-gradient(135deg,#aa55ff,#7700cc)',boxShadow:'0 0 16px rgba(170,85,255,.5)'}}
+              onPointerDown={()=>handleKey({key:'ArrowLeft',preventDefault:()=>{}})}
+              onTouchStart={(e)=>{e.preventDefault();handleKey({key:'ArrowLeft',preventDefault:()=>{}});}}>◀</button>
+            <button className="dpad-btn rounded-xl text-xl text-white font-black"
+              style={{background:'linear-gradient(135deg,#aa55ff,#7700cc)',boxShadow:'0 0 16px rgba(170,85,255,.5)'}}
+              onPointerDown={()=>handleKey({key:'ArrowDown',preventDefault:()=>{}})}
+              onTouchStart={(e)=>{e.preventDefault();handleKey({key:'ArrowDown',preventDefault:()=>{}});}}>▼</button>
+            <button className="dpad-btn rounded-xl text-xl text-white font-black"
+              style={{background:'linear-gradient(135deg,#aa55ff,#7700cc)',boxShadow:'0 0 16px rgba(170,85,255,.5)'}}
+              onPointerDown={()=>handleKey({key:'ArrowRight',preventDefault:()=>{}})}
+              onTouchStart={(e)=>{e.preventDefault();handleKey({key:'ArrowRight',preventDefault:()=>{}});}}>▶</button>
           </div>
         </div>
       );
