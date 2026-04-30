@@ -641,8 +641,8 @@
       };
 
       return (
-        <div className="min-h-screen w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
-             style={{ background:'radial-gradient(ellipse at 50% 0%,#1a0030 0%,#050510 60%)', position:'relative' }}>
+        <div className="w-full flex flex-col items-center justify-start px-3 py-4 select-none touch-none overflow-hidden"
+             style={{ height:'100dvh', background:'radial-gradient(ellipse at 50% 0%,#1a0030 0%,#050510 60%)', position:'relative' }}>
           <div className="blob" style={{ width:200,height:200,background:'#ff00ff',top:-80,right:-60 }}/>
           <div className="blob" style={{ width:160,height:160,background:'#0088ff',bottom:120,left:-50,animationDelay:'3s' }}/>
           <div className="blob" style={{ width:120,height:120,background:'#ffd700',top:'40%',left:'60%',animationDelay:'6s' }}/>
@@ -657,9 +657,9 @@
             </div>
           </div>
 
-          <div className="w-full max-w-full lg:max-w-3xl z-10" style={{ position:'relative' }}>
+          <div className="w-full max-w-full lg:max-w-3xl z-10" style={{ flex:1, minHeight:0, position:'relative', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <canvas ref={canvasRef} width={SN_CS} height={SN_CS}
-                    style={{ width:'100%', aspectRatio:'1', borderRadius:'16px', display:'block', border:'1px solid rgba(255,136,255,0.15)', boxShadow:'0 0 40px rgba(255,0,255,.1),0 20px 60px rgba(0,0,0,.8)' }}/>
+                    style={{ maxWidth:'100%', maxHeight:'100%', aspectRatio:'1', borderRadius:'16px', display:'block', border:'1px solid rgba(255,136,255,0.15)', boxShadow:'0 0 40px rgba(255,0,255,.1),0 20px 60px rgba(0,0,0,.8)' }}/>
 
             {!started && !gameOver && (
               <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl"
@@ -1753,35 +1753,23 @@
       const rafRef=React.useRef(null);
       const[over,setOver]=React.useState(null);
       const[best,setBest]=React.useState(()=>parseInt(localStorage.getItem('ff_best')||'0'));
+      const[elapsed,setElapsed]=React.useState(0);
+      const elapsedRef=React.useRef(0);
+
+      // Pool de chiens: apparaissent 1 par 1 toutes les 20s
+      const DOG_POOL=[
+        {x:13,y:1,clr:FF_GHOST[0]},
+        {x:1,y:17,clr:FF_GHOST[1]},
+        {x:13,y:17,clr:FF_GHOST[2]},
+        {x:7,y:9,clr:FF_GHOST[3]},
+      ];
 
       function initState(){
         const maze=ffGenMaze();
-        // dots on all path tiles except cat start
-        const dots=Array.from({length:FF_ROWS},(_,y)=>Array.from({length:FF_COLS},(_,x)=>{
-          if(maze[y][x]!==1) return false;
-          if(x===1&&y===1) return false;
-          return true;
-        }));
-        // power stars at 4 corners (inner)
-        const powers=new Set(['13,1','1,17','13,17','1,1']);
-        // remove cat start from powers
-        powers.delete('1,1');
-        // place power dots only on path tiles
-        const pwSet=new Set();
-        for(const k of powers){
-          const[px,py]=k.split(',').map(Number);
-          if(maze[py][px]===1) pwSet.add(k);
-        }
         return{
-          maze,dots,pwSet,
-          score:0,
+          maze,
           cat:{x:1,y:1,px:1*FF_TILE+FF_TILE/2,py:1*FF_TILE+FF_TILE/2,dir:null,nextDir:null},
-          dogs:[
-            {x:13,y:1,px:13*FF_TILE+FF_TILE/2,py:1*FF_TILE+FF_TILE/2,timer:0,scatter:120,clr:FF_GHOST[0]},
-            {x:1,y:17,px:1*FF_TILE+FF_TILE/2,py:17*FF_TILE+FF_TILE/2,timer:0,scatter:80,clr:FF_GHOST[1]},
-            {x:13,y:17,px:13*FF_TILE+FF_TILE/2,py:17*FF_TILE+FF_TILE/2,timer:0,scatter:100,clr:FF_GHOST[2]},
-            {x:7,y:9,px:7*FF_TILE+FF_TILE/2,py:9*FF_TILE+FF_TILE/2,timer:0,scatter:60,clr:FF_GHOST[3]},
-          ],
+          dogs:[{x:DOG_POOL[0].x,y:DOG_POOL[0].y,timer:0,clr:DOG_POOL[0].clr}],
           invinc:0,
           tick:0,
           lives:3,
@@ -1799,6 +1787,8 @@
         st.current=initState();
         st.current.running=true;
         st.current.started=true;
+        elapsedRef.current=0;
+        setElapsed(0);
         setOver(null);
         loop();
       }
@@ -1808,6 +1798,8 @@
           if(!st.current||!st.current.running){draw();return;}
           update();
           draw();
+          const secs=Math.floor(st.current.tick/60);
+          if(secs!==elapsedRef.current){elapsedRef.current=secs;setElapsed(secs);}
           loop();
         });
       }
@@ -1864,28 +1856,17 @@
           }
         }
 
-        // collect dots
-        const dk=`${cat.x},${cat.y}`;
-        if(s.dots[cat.y]&&s.dots[cat.y][cat.x]){
-          s.dots[cat.y][cat.x]=false;
-          s.score+=s.pwSet.has(dk)?10:1;
-          s.pwSet.delete(dk);
+        // apparition progressive: +1 chien toutes les 20s (1200 ticks), max 4
+        if(s.tick>0&&s.tick%1200===0&&s.dogs.length<DOG_POOL.length){
+          const p=DOG_POOL[s.dogs.length];
+          s.dogs.push({x:p.x,y:p.y,timer:0,clr:p.clr});
         }
 
-        // move dogs
+        // move dogs (BFS direct, no scatter)
         for(const dog of s.dogs){
           dog.timer--;
           if(dog.timer>0) continue;
           dog.timer=Math.round(T/FF_DOG_SPD);
-          // BFS toward cat (or scatter)
-          let tx,ty;
-          dog.scatter--;
-          if(dog.scatter>0&&(s.tick%300<150)){
-            // wander randomly
-            const moves=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dx,dy])=>canMove(s.maze,dog.x+dx,dog.y+dy));
-            if(moves.length){const[dx,dy]=moves[Math.floor(Math.random()*moves.length)];dog.x+=dx;dog.y+=dy;}
-            continue;
-          }
           const step=ffBFS(s.maze,dog.x,dog.y,cat.x,cat.y);
           if(step){
             let nx=dog.x+step.dx,ny=dog.y+step.dy;
@@ -1903,12 +1884,13 @@
               s.invinc=FF_INVINC;
               if(s.lives<=0){
                 s.running=false;
-                const finalScore=s.score;
-                if(finalScore>parseInt(localStorage.getItem('ff_best')||'0')){
-                  localStorage.setItem('ff_best',String(finalScore));
-                  setBest(finalScore);
+                const finalSecs=Math.floor(s.tick/60);
+                const prevBest=parseInt(localStorage.getItem('ff_best')||'0');
+                if(finalSecs>prevBest){
+                  localStorage.setItem('ff_best',String(finalSecs));
+                  setBest(finalSecs);
                 }
-                setOver({score:finalScore,best:Math.max(finalScore,best)});
+                setOver({score:finalSecs,best:Math.max(finalSecs,best)});
               }
               break;
             }
@@ -1933,41 +1915,6 @@
             ctx.strokeStyle='#1a3aff';
             ctx.lineWidth=1;
             ctx.strokeRect(x*T+0.5,y*T+0.5,T-1,T-1);
-          }
-        }
-
-        // dots
-        for(let y=0;y<FF_ROWS;y++) for(let x=0;x<FF_COLS;x++){
-          if(!s.dots[y]||!s.dots[y][x]) continue;
-          const dk=`${x},${y}`;
-          const cx=x*T+T/2, cy=y*T+T/2;
-          if(s.pwSet&&s.pwSet.has(dk)){
-            // power star
-            ctx.save();
-            ctx.fillStyle='#ffd700';
-            ctx.shadowColor='#ffd700';
-            ctx.shadowBlur=8;
-            ctx.beginPath();
-            for(let i=0;i<5;i++){
-              const a=Math.PI/2+i*Math.PI*2/5-Math.PI/5;
-              const a2=Math.PI/2+i*Math.PI*2/5+Math.PI/5;
-              if(i===0) ctx.moveTo(cx+6*Math.cos(a-Math.PI*2/5+Math.PI/5),cy-6*Math.sin(a-Math.PI*2/5+Math.PI/5));
-              ctx.lineTo(cx+6*Math.cos(a),cy-6*Math.sin(a));
-              ctx.lineTo(cx+2.5*Math.cos(a2),cy-2.5*Math.sin(a2));
-            }
-            ctx.closePath(); ctx.fill();
-            ctx.restore();
-          } else {
-            // fish dot
-            ctx.save();
-            ctx.fillStyle='#00e5ff';
-            ctx.shadowColor='#00e5ff';
-            ctx.shadowBlur=4;
-            // small fish shape
-            ctx.beginPath();
-            ctx.ellipse(cx,cy,3,2,0,0,Math.PI*2);
-            ctx.fill();
-            ctx.restore();
           }
         }
 
@@ -2067,7 +2014,6 @@
       const CW=FF_COLS*FF_TILE, CH=FF_ROWS*FF_TILE;
 
       const liveCount=st.current?st.current.lives:3;
-      const currentScore=st.current?st.current.score:0;
 
       return(
         <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
@@ -2087,8 +2033,8 @@
               </div>
             </div>
             <div className="text-right">
-              <p className="score-text font-black" style={{fontSize:'1.6rem',lineHeight:1}}>{currentScore}</p>
-              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',fontWeight:900,color:'#ffd700',letterSpacing:'.05em'}}>BEST: {best}</div>
+              <p className="score-text font-black" style={{fontSize:'1.6rem',lineHeight:1}}>{elapsed}s</p>
+              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',fontWeight:900,color:'#ffd700',letterSpacing:'.05em'}}>BEST: {best}s</div>
             </div>
           </div>
 
@@ -2099,8 +2045,8 @@
                 <p className="text-5xl mb-3" style={{filter:'drop-shadow(0 0 20px #bb88ff)'}}>🐱</p>
                 <h2 className="font-black mb-2 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.8rem',color:'#bb88ff',textShadow:'0 0 20px #aa55ff'}}>FUITE FÉLINE</h2>
                 <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">
-                  Échappe aux chiens dans le labyrinthe !<br/>
-                  🐟 Poisson = 1pt · ⭐ Étoile = 10pt
+                  Échappe aux chiens le plus longtemps possible !<br/>
+                  Un nouveau chien arrive toutes les 20s…
                 </p>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{fontSize:'.65rem',fontFamily:'Orbitron,sans-serif'}}>
                   <span style={{color:'#00eeff'}}>◀▶ Tunnels Pac-Man</span>
@@ -2113,8 +2059,8 @@
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,4,14,.94)',backdropFilter:'blur(4px)'}}>
                 <p className="text-4xl mb-3">😿</p>
                 <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:'#ff4444',textShadow:'0 0 20px #ff4444'}}>ATTRAPÉ !</h2>
-                <p className="score-text font-black mb-1" style={{fontSize:'2.4rem'}}>{over.score}</p>
-                <p className="mb-5" style={{fontFamily:'Orbitron,sans-serif',fontSize:'.68rem',letterSpacing:'.08em',color:'#ffd700'}}>MEILLEUR : {over.best}</p>
+                <p className="score-text font-black mb-1" style={{fontSize:'2.4rem'}}>{over.score}s</p>
+                <p className="mb-5" style={{fontFamily:'Orbitron,sans-serif',fontSize:'.68rem',letterSpacing:'.08em',color:'#ffd700'}}>MEILLEUR : {over.best}s</p>
                 <button onClick={startGame} className="rounded-full px-10 py-4 text-xl font-black text-white" style={{background:'linear-gradient(135deg,#aa55ff,#00eeff)',boxShadow:'0 0 30px #aa55ff',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
               </div>
             )}
