@@ -1396,360 +1396,459 @@
 
     // ── Canon Break ──────────────────────────────────────────────────────────
     function CannonBreak({ onBack }) {
-      /*
-       * Physique : test cercle / rectangle par point-le-plus-proche.
-       * Pour chaque bloc, on calcule le point du rectangle le plus proche
-       * du centre de la balle, puis on mesure la distance. Si elle est
-       * inférieure au rayon, il y a collision. La face touchée est déduite
-       * de la position du point le plus proche sur le rectangle.
-       * Cela élimine toute ambiguïté de coin et tout calcul d'overlap.
-       */
-      const GW=360,GH=560,BR=9,PH=12,MAX_SPD=8;
-      const BH=18,BGAP=22,BCOLS=8,BW=Math.floor((GW-16)/BCOLS);
-      const BNUS={wide:{color:'#00ff88',icon:'⚓'},life:{color:'#ff2244',icon:'❤️'}};
-      const LNAMES=['GRILLE','PYRAMIDE','DAMIER','VAGUES','BOSS'];
+      const cvRef = React.useRef(null);
+      const rafRef = React.useRef(null);
+      const stRef = React.useRef(null);
 
-      const cvsRef=useRef(null),gRef=useRef(null),rafRef=useRef(null);
-      const movRef=useRef(0),phsRef=useRef('menu');
-      const [phase,setPhase]=useState('menu');
-      const [uiSc,setUiSc]=useState(0);
-      const [uiHp,setUiHp]=useState(3);
-      const [uiLv,setUiLv]=useState(1);
-      const [won,setWon]=useState(false);
+      const GW = 360, GH = 540;
+      const BR = 8;
+      const PH = 12;
+      const BASE_W = 100;
+      const BH = 16;
+      const BCOLS = 8;
+      const BM = 8;
+      const BW = Math.floor((GW - 2 * BM) / BCOLS);
 
-      /* ── helpers ── */
-      function mkBall(x,y,spd){
-        const a=-Math.PI/2+(Math.random()-.5)*0.75;
-        const s=spd||4.5;
-        return{x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s};
+      const BONUS_COLORS = { life: '#ff4466', wide: '#44ffaa', narrow: '#ffaa44', multi: '#8866ff', cannon: '#ff6600' };
+      const BONUS_ICONS = { life: '❤', wide: '⟺', narrow: '↔', multi: '⊗', cannon: '●' };
+      const BONUS_TYPES = ['life', 'wide', 'narrow', 'multi', 'cannon'];
+
+      const PALETTES = [
+        ['#ff4466', '#ff6644', '#ffaa22', '#44ff88', '#22aaff', '#cc44ff'],
+        ['#8866ff', '#aa44ff', '#ff44aa', '#ff6622', '#ffcc00', '#44ffcc'],
+        ['#00ffcc', '#00aaff', '#ff00aa', '#ffcc00', '#ff4400', '#88ff44'],
+        ['#ff6644', '#ff44cc', '#44ccff', '#88ff44', '#ffaa00', '#ff0088'],
+        ['#ff0044', '#ff4400', '#ffaa00', '#00ff88', '#0088ff', '#cc00ff'],
+      ];
+
+      function pickColor(level, row) {
+        const p = PALETTES[level % PALETTES.length];
+        return p[row % p.length];
       }
-      function mkBlk(x,y,hp,col,pts,bon){
-        return{x,y,w:BW-4,h:BH,hp,maxHp:hp,color:col,pts,bonus:bon||null};
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
       }
 
-      /* ── niveaux : 5 formes distinctes ── */
-      function buildLevel(n){
-        const sy=48,S=26,bs=[];
-        const X=c=>8+c*BW;
+      function buildLevel(n) {
+        const sy = 56;
+        const GAP = 4;
+        const bs = [];
+        const X = c => BM + c * BW;
 
-        if(n===0){
-          // GRILLE : rectangle plein 5×8
-          const clrs=['#aa44ff','#ff3344','#00cc66','#22aaff','#ffcc00'];
-          const hps=[2,2,1,1,1];
-          const bon=[null,null,'wide',null,'life'];
-          for(let r=0;r<5;r++) for(let c=0;c<BCOLS;c++)
-            bs.push(mkBlk(X(c),sy+r*S,hps[r],clrs[r],10+r*5,c===4?bon[r]:null));
+        if (n === 0) {
+          // GRILLE pleine 5 rangées
+          for (let r = 0; r < 5; r++)
+            for (let c = 0; c < BCOLS; c++)
+              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
 
-        }else if(n===1){
-          // PYRAMIDE : losange centré
-          const shape=[[3,4],[2,5],[1,6],[0,7],[1,6],[2,5]];
-          const clrs=['#ff0055','#aa44ff','#ff3344','#22aaff','#00cc66','#ffcc00'];
-          shape.forEach(([from,to],r)=>{
-            for(let c=from;c<=to;c++)
-              bs.push(mkBlk(X(c),sy+r*S,r<3?3:2,clrs[r],20+r*8,
-                r===3&&c===0?'life':r===3&&c===7?'wide':null));
+        } else if (n === 1) {
+          // PYRAMIDE : losange
+          const rows = [[3,4],[2,5],[1,6],[0,7],[1,6],[2,5],[3,4]];
+          rows.forEach(([lo, hi], r) => {
+            for (let c = lo; c <= hi; c++)
+              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
           });
 
-        }else if(n===2){
-          // DAMIER : cases alternées
-          const clrs=['#ff0055','#22aaff','#00cc66','#ff8800','#aa44ff','#ffcc00'];
-          for(let r=0;r<6;r++) for(let c=0;c<BCOLS;c++){
-            if((r+c)%2===0)
-              bs.push(mkBlk(X(c),sy+r*S,3,clrs[r],25+r*10,
-                r===0&&c===0?'life':r===5&&c===6?'wide':null));
+        } else if (n === 2) {
+          // DAMIER
+          for (let r = 0; r < 6; r++)
+            for (let c = 0; c < BCOLS; c++)
+              if ((r + c) % 2 === 0)
+                bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
+
+        } else if (n === 3) {
+          // VAGUES sinusoïdales
+          for (let c = 0; c < BCOLS; c++) {
+            const numRows = 3 + Math.round((Math.sin(c / BCOLS * Math.PI * 2) + 1) * 2);
+            for (let r = 0; r < numRows; r++)
+              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, c), bonus: null });
           }
 
-        }else if(n===3){
-          // VAGUES : décalage sinusoïdal par colonne
-          const clrs=['#ff0055','#aa44ff','#22aaff','#00cc66','#ffcc00'];
-          for(let c=0;c<BCOLS;c++){
-            const yOff=Math.round(Math.sin(c/BCOLS*Math.PI*2)*2)+2;
-            for(let r=0;r<5;r++)
-              bs.push(mkBlk(X(c),sy+(r+yOff)*S,3,clrs[r],30+r*12,
-                r===0&&c===0?'life':r===4&&c===7?'wide':null));
-          }
-
-        }else{
-          // BOSS : diamant dense HP×4
-          const pat=[
-            [0,0,0,1,1,0,0,0],
-            [0,0,1,1,1,1,0,0],
-            [0,1,1,1,1,1,1,0],
-            [1,1,1,1,1,1,1,1],
-            [0,1,1,1,1,1,1,0],
-            [0,0,1,1,1,1,0,0],
-            [0,0,0,1,1,0,0,0],
+        } else {
+          // BOSS : pattern en croix / forteresse
+          const pattern = [
+            [0,1,0,1,1,1,0,1],
+            [1,0,1,1,1,1,0,1],
+            [0,1,1,0,0,1,1,0],
+            [1,1,0,0,0,0,1,1],
+            [1,1,0,0,0,0,1,1],
+            [0,1,1,0,0,1,1,0],
+            [1,0,1,1,1,1,0,1],
+            [0,1,0,1,1,1,0,1],
           ];
-          pat.forEach((row,r)=>row.forEach((has,c)=>{
-            if(has) bs.push(mkBlk(X(c),sy+r*S,4,c<4?'#ff0055':'#aa44ff',50,
-              r===3&&c===0?'life':r===3&&c===7?'wide':null));
-          }));
+          pattern.forEach((row, r) => {
+            row.forEach((v, c) => {
+              if (!v) return;
+              const isCore = r >= 3 && r <= 4 && c >= 3 && c <= 4;
+              const hp = isCore ? 3 : (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 2 : 1;
+              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp, maxHp: hp, color: pickColor(n, r), bonus: null });
+            });
+          });
         }
+
+        // 2 bonus au hasard parmi les briques
+        const bonusPool = shuffle([...BONUS_TYPES]).slice(0, 2);
+        const idxPool = shuffle([...Array(bs.length).keys()]).slice(0, 2);
+        idxPool.forEach((i, k) => { bs[i].bonus = bonusPool[k]; });
         return bs;
       }
 
-      function startLevel(n,sc,hp){
-        const pad={x:(GW-100)/2,y:GH-50,w:100};
-        const ballSpd=4.5+n*0.8;
-        gRef.current={
-          lv:n,score:sc||0,lives:hp||3,
-          balls:[mkBall(GW/2,GH-80,ballSpd)],
-          ballSpd,
-          pad,
-          blocks:buildLevel(n),
-          drops:[],
-          spawned:new Set(),
+      function mkBall(n) {
+        const spd = 4.5 + n * 0.6;
+        const ang = (Math.random() - 0.5) * 0.8;
+        return { x: GW / 2, y: GH - 60, vx: Math.sin(ang) * spd, vy: -Math.abs(Math.cos(ang) * spd) };
+      }
+
+      function initGame() {
+        return {
+          level: 0,
+          blocks: buildLevel(0),
+          balls: [mkBall(0)],
+          paddle: { x: GW / 2 - BASE_W / 2, y: GH - 40, w: BASE_W, h: PH },
+          capsules: [],
+          bullets: [],
+          wideTimer: 0,
+          narrowTimer: 0,
+          lives: 3,
+          score: 0,
+          started: false,
+          lost: false,
+          won: false,
         };
-        phsRef.current='play';
-        setPhase('play');setUiSc(sc||0);setUiHp(hp||3);setUiLv(n+1);
       }
-      function newGame(){setWon(false);startLevel(0,0,3);}
 
-      /* ── collision cercle/bloc ──────────────────────────────────────────
-       * Point le plus proche du centre de la balle sur le rectangle.
-       * Si distance < BR → collision.
-       * La face touchée est déduite du point le plus proche.
-       * ---------------------------------------------------------------- */
-      function resolveBlock(b,bl){
-        // Point le plus proche du centre (b.x,b.y) sur le rect bl
-        const cpx=Math.max(bl.x,Math.min(b.x,bl.x+bl.w));
-        const cpy=Math.max(bl.y,Math.min(b.y,bl.y+bl.h));
-        const dx=b.x-cpx, dy=b.y-cpy;
-        const d2=dx*dx+dy*dy;
-        if(d2>=BR*BR)return false;          // pas de collision
+      function overlaps(bx, by, bl) {
+        return bx + BR > bl.x && bx - BR < bl.x + bl.w && by + BR > bl.y && by - BR < bl.y + bl.h;
+      }
 
-        const d=Math.sqrt(d2);
-        if(d<0.001){
-          // Centre de la balle à l'intérieur du bloc : cas dégénéré
-          // On pousse la balle vers l'arrière selon sa vitesse
-          const sp=Math.hypot(b.vx,b.vy)||1;
-          b.x-=b.vx/sp*BR; b.y-=b.vy/sp*BR;
-          b.vx=-b.vx; b.vy=-b.vy;
-        }else{
-          // Push-out : on déplace la balle le long de la normale
-          const ov=BR-d;
-          b.x+=dx/d*ov; b.y+=dy/d*ov;
-          // Rebond selon la face touchée
-          if(cpx===bl.x)          b.vx=-Math.abs(b.vx); // face gauche
-          else if(cpx===bl.x+bl.w)b.vx= Math.abs(b.vx); // face droite
-          if(cpy===bl.y)          b.vy=-Math.abs(b.vy); // face haute
-          else if(cpy===bl.y+bl.h)b.vy= Math.abs(b.vy); // face basse
+      function doHit(g, bl, idx) {
+        bl.hp--;
+        g.score += 10;
+        if (bl.hp <= 0) {
+          if (bl.bonus) g.capsules.push({ x: bl.x + bl.w / 2, y: bl.y + bl.h, type: bl.bonus, vy: 2.5 });
+          g.blocks.splice(idx, 1);
         }
-        // Plafond de vitesse
-        const sp=Math.hypot(b.vx,b.vy);
-        if(sp>MAX_SPD){b.vx=b.vx/sp*MAX_SPD;b.vy=b.vy/sp*MAX_SPD;}
-        return true;
       }
 
-      /* ── update ── */
-      function update(){
-        const g=gRef.current;if(!g)return;
-        g.blocks.forEach(bl=>{bl._hit=false;});
-        // Palette
-        if(movRef.current<0)g.pad.x=Math.max(0,g.pad.x-6);
-        if(movRef.current>0)g.pad.x=Math.min(GW-g.pad.w,g.pad.x+6);
-        // Bonus tombants
-        g.drops=g.drops.filter(d=>{
-          d.y+=2.5;
-          if(d.y>=g.pad.y&&d.y<=g.pad.y+PH&&d.x>=g.pad.x&&d.x<=g.pad.x+g.pad.w){
-            playEat();
-            if(d.type==='wide')g.pad.w=Math.min(220,g.pad.w+50);
-            if(d.type==='life'){g.lives=Math.min(5,g.lives+1);setUiHp(g.lives);}
-            return false;
-          }
-          return d.y<GH+20;
-        });
-        // Balles
-        const alive=[];let anyLost=false;
-        g.balls.forEach(b=>{
-          // Garde-fou NaN
-          if(!isFinite(b.x)||!isFinite(b.y)||!isFinite(b.vx)||!isFinite(b.vy)){
-            b.x=g.pad.x+g.pad.w/2;b.y=g.pad.y-BR-2;b.vx=3;b.vy=-4;
-          }
-          b.x+=b.vx; b.y+=b.vy;
-          // Murs
-          if(b.x-BR<0){b.x=BR;b.vx=Math.abs(b.vx);}
-          if(b.x+BR>GW){b.x=GW-BR;b.vx=-Math.abs(b.vx);}
-          if(b.y-BR<0){b.y=BR;b.vy=Math.abs(b.vy);}
-          // Palette
-          if(b.vy>0&&b.y+BR>=g.pad.y&&b.y-BR<=g.pad.y+PH
-             &&b.x>g.pad.x-4&&b.x<g.pad.x+g.pad.w+4){
-            b.y=g.pad.y-BR;
-            const t=Math.max(0,Math.min(1,(b.x-g.pad.x)/g.pad.w));
-            const a=(t-.5)*(Math.PI*0.65);
-            const sp=Math.hypot(b.vx,b.vy);
-            b.vx=Math.sin(a)*sp;
-            b.vy=-Math.abs(Math.cos(a)*sp);
-          }
-          // Blocs — un seul hit par bloc par frame
-          for(let i=g.blocks.length-1;i>=0;i--){
-            const bl=g.blocks[i];
-            if(bl._hit) continue;
-            if(resolveBlock(b,bl)){
-              bl._hit=true;
-              bl.hp--;
-              if(bl.hp<=0){
-                const bon=(bl.bonus&&BNUS[bl.bonus]&&!g.spawned.has(bl.bonus))
-                          ?bl.bonus:null;
-                if(bon){
-                  g.drops.push({x:bl.x+bl.w/2,y:bl.y+bl.h/2,type:bon});
-                  g.spawned.add(bon);
-                }
-                g.score+=bl.pts;
-                setUiSc(g.score);
-                playEat();
-                g.blocks.splice(i,1);
-              }
-              break;
+      function applyBonus(g, type) {
+        if (type === 'life') {
+          g.lives = Math.min(g.lives + 1, 9);
+        } else if (type === 'wide') {
+          g.paddle.w = Math.min(BASE_W * 1.8, GW * 0.7);
+          g.wideTimer = 600; g.narrowTimer = 0;
+        } else if (type === 'narrow') {
+          g.paddle.w = Math.max(BASE_W * 0.4, 40);
+          g.narrowTimer = 600; g.wideTimer = 0;
+        } else if (type === 'multi') {
+          const extras = [];
+          g.balls.slice(0, 2).forEach(b => {
+            extras.push({ x: b.x, y: b.y, vx: -b.vx * 0.95 + 0.5, vy: b.vy });
+            extras.push({ x: b.x, y: b.y, vx: b.vx * 0.95 - 0.5, vy: b.vy * 0.95 });
+          });
+          g.balls.push(...extras);
+        } else if (type === 'cannon') {
+          for (let i = 0; i < 5; i++)
+            g.bullets.push({ x: g.paddle.x + (i + 1) * g.paddle.w / 6, y: g.paddle.y });
+        }
+      }
+
+      function update(g) {
+        if (!g.started || g.lost || g.won) return;
+        const spd = 4.5 + g.level * 0.6;
+
+        // bonus timers
+        if (g.wideTimer > 0 && --g.wideTimer === 0) g.paddle.w = BASE_W;
+        if (g.narrowTimer > 0 && --g.narrowTimer === 0) g.paddle.w = BASE_W;
+
+        // bullets
+        for (let i = g.bullets.length - 1; i >= 0; i--) {
+          g.bullets[i].y -= 9;
+          if (g.bullets[i].y < 0) { g.bullets.splice(i, 1); continue; }
+          const bu = g.bullets[i];
+          let hit = false;
+          for (let j = g.blocks.length - 1; j >= 0; j--) {
+            const bl = g.blocks[j];
+            if (bu.x > bl.x && bu.x < bl.x + bl.w && bu.y > bl.y && bu.y < bl.y + bl.h) {
+              doHit(g, bl, j); hit = true; break;
             }
           }
-          if(!isFinite(b.y)||b.y-BR>GH){anyLost=true;return;}
-          alive.push(b);
-        });
-        g.balls=alive;
-        if(anyLost&&g.balls.length===0){
-          g.lives--;setUiHp(g.lives);playMiss();
-          if(g.lives<=0){phsRef.current='over';setPhase('over');return;}
-          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-BR-2,g.ballSpd)];
+          if (hit) g.bullets.splice(i, 1);
         }
-        if(g.blocks.length===0){
-          if(g.lv<4){phsRef.current='next';setPhase('next');}
-          else{phsRef.current='over';setWon(true);setPhase('over');}
-        }
-      }
 
-      /* ── draw ── */
-      function draw(){
-        const canvas=cvsRef.current;if(!canvas)return;
-        const ctx=canvas.getContext('2d'),g=gRef.current;
-        const bg=ctx.createLinearGradient(0,0,0,GH);
-        bg.addColorStop(0,'#0a1628');bg.addColorStop(1,'#041018');
-        ctx.fillStyle=bg;ctx.fillRect(0,0,GW,GH);
-        if(!g)return;
-        g.blocks.forEach(bl=>{
-          // base = '#rrggbb' (7 chars) — on n'y concatene jamais plus de 2 chars
-          const base=bl.color;
-          const dim=bl.hp<bl.maxHp;
-          ctx.save();
-          ctx.globalAlpha=dim?0.45:1;
-          ctx.shadowColor=base;ctx.shadowBlur=12;
-          const gr=ctx.createLinearGradient(bl.x,bl.y,bl.x,bl.y+bl.h);
-          gr.addColorStop(0,base+'ee');gr.addColorStop(1,base+'55');
-          ctx.fillStyle=gr;rrect(ctx,bl.x,bl.y,bl.w,bl.h,4);ctx.fill();
-          ctx.strokeStyle=base+'88';ctx.lineWidth=1;ctx.stroke();
-          if(bl.maxHp>1){
-            ctx.globalAlpha=1;
-            ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 9px sans-serif';
-            ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.fillText(bl.hp,bl.x+bl.w/2,bl.y+bl.h/2);
+        // capsules
+        for (let i = g.capsules.length - 1; i >= 0; i--) {
+          const cap = g.capsules[i];
+          cap.y += cap.vy;
+          const pd = g.paddle;
+          if (cap.y + 8 > pd.y && cap.y - 8 < pd.y + pd.h && cap.x > pd.x && cap.x < pd.x + pd.w) {
+            applyBonus(g, cap.type); g.capsules.splice(i, 1); continue;
           }
-          ctx.restore();
-        });
-        try{
-          g.drops.forEach(d=>{
-            const bn=BNUS[d.type];if(!bn)return;
-            ctx.save();ctx.shadowColor=bn.color;ctx.shadowBlur=12;
-            ctx.fillStyle=bn.color+'cc';ctx.beginPath();ctx.arc(d.x,d.y,10,0,Math.PI*2);ctx.fill();
-            ctx.restore();
-            ctx.font='10px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.fillText(bn.icon,d.x,d.y);
-          });
-        }catch(e){}
-        try{
-          ctx.save();ctx.shadowColor='#22d3ee';ctx.shadowBlur=20;
-          const pg=ctx.createLinearGradient(g.pad.x,g.pad.y,g.pad.x,g.pad.y+PH);
-          pg.addColorStop(0,'#38e8ff');pg.addColorStop(1,'#0ea5e9');
-          ctx.fillStyle=pg;rrect(ctx,g.pad.x,g.pad.y,g.pad.w,PH,6);ctx.fill();
-          ctx.restore();
-        }catch(e){}
-        try{
-          g.balls.forEach(b=>{
-            if(!isFinite(b.x)||!isFinite(b.y))return;
-            ctx.save();ctx.shadowColor='#fffbeb';ctx.shadowBlur=20;
-            const bg2=ctx.createRadialGradient(b.x-2,b.y-2,1,b.x,b.y,BR);
-            bg2.addColorStop(0,'#fff');bg2.addColorStop(.5,'#ccc');bg2.addColorStop(1,'#555');
-            ctx.fillStyle=bg2;ctx.beginPath();ctx.arc(b.x,b.y,BR,0,Math.PI*2);ctx.fill();
-            ctx.restore();
-          });
-        }catch(e){}
+          if (cap.y > GH + 20) g.capsules.splice(i, 1);
+        }
+
+        // balls — split axis
+        for (let bi = g.balls.length - 1; bi >= 0; bi--) {
+          const b = g.balls[bi];
+          const bspd = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || spd;
+          b.vx = b.vx / bspd * spd;
+          b.vy = b.vy / bspd * spd;
+
+          // ── X axis ──
+          b.x += b.vx;
+          if (b.x - BR < 0)  { b.x = BR;      b.vx = Math.abs(b.vx); }
+          if (b.x + BR > GW) { b.x = GW - BR; b.vx = -Math.abs(b.vx); }
+          for (let j = g.blocks.length - 1; j >= 0; j--) {
+            const bl = g.blocks[j];
+            if (overlaps(b.x, b.y, bl)) {
+              b.vx = -b.vx;
+              b.x = b.vx > 0 ? bl.x + bl.w + BR : bl.x - BR;
+              doHit(g, bl, j); break;
+            }
+          }
+
+          // ── Y axis ──
+          b.y += b.vy;
+          if (b.y - BR < 0) { b.y = BR; b.vy = Math.abs(b.vy); }
+          // paddle
+          const pd = g.paddle;
+          if (b.vy > 0 && b.y + BR >= pd.y && b.y - BR <= pd.y + pd.h && b.x + BR > pd.x && b.x - BR < pd.x + pd.w) {
+            b.y = pd.y - BR;
+            const rel = (b.x - pd.x) / pd.w - 0.5;
+            const ang = rel * 2.0;
+            b.vx = Math.sin(ang) * spd;
+            b.vy = -Math.abs(Math.cos(ang) * spd || spd * 0.3);
+          }
+          // blocks Y
+          for (let j = g.blocks.length - 1; j >= 0; j--) {
+            const bl = g.blocks[j];
+            if (overlaps(b.x, b.y, bl)) {
+              b.vy = -b.vy;
+              b.y = b.vy > 0 ? bl.y + bl.h + BR : bl.y - BR;
+              doHit(g, bl, j); break;
+            }
+          }
+
+          // ball lost
+          if (b.y - BR > GH) g.balls.splice(bi, 1);
+        }
+
+        // all balls lost
+        if (g.balls.length === 0) {
+          g.lives--;
+          if (g.lives <= 0) { g.lost = true; return; }
+          g.balls = [mkBall(g.level)];
+          g.started = false;
+        }
+
+        // level clear
+        if (g.blocks.length === 0) {
+          g.level++;
+          if (g.level >= 5) { g.won = true; return; }
+          g.blocks = buildLevel(g.level);
+          g.balls = [mkBall(g.level)];
+          g.capsules = []; g.bullets = [];
+          g.wideTimer = 0; g.narrowTimer = 0;
+          g.paddle.w = BASE_W;
+          g.started = false;
+        }
       }
 
-      /* ── boucle RAF ── */
-      useEffect(()=>{
-        if(phase!=='play')return;
-        let last=0;
-        const loop=(t)=>{
-          if(phsRef.current!=='play')return;
-          try{if(t-last>=16){last=t;update();draw();}}
-          catch(e){console.error('CB:',e);try{draw();}catch(_){}}
-          rafRef.current=requestAnimationFrame(loop);
+      function draw(ctx, g) {
+        ctx.clearRect(0, 0, GW, GH);
+        ctx.fillStyle = '#05050f';
+        ctx.fillRect(0, 0, GW, GH);
+
+        // bricks
+        for (const bl of g.blocks) {
+          ctx.globalAlpha = bl.hp < bl.maxHp ? 0.5 : 1;
+          ctx.shadowColor = bl.color;
+          ctx.shadowBlur = 10;
+          const gr = ctx.createLinearGradient(bl.x, bl.y, bl.x, bl.y + bl.h);
+          gr.addColorStop(0, bl.color + 'ee');
+          gr.addColorStop(1, bl.color + '55');
+          ctx.fillStyle = gr;
+          ctx.fillRect(bl.x + 1, bl.y + 1, bl.w - 2, bl.h - 2);
+          ctx.shadowBlur = 0;
+          // HP dots
+          if (bl.maxHp > 1) {
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = '#ffffff';
+            for (let h = 0; h < bl.hp; h++) {
+              ctx.beginPath();
+              ctx.arc(bl.x + bl.w / 2 + (h - (bl.hp - 1) / 2) * 8, bl.y + bl.h / 2, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          // bonus marker
+          if (bl.bonus) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = BONUS_COLORS[bl.bonus];
+            ctx.font = 'bold 9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(BONUS_ICONS[bl.bonus], bl.x + bl.w / 2, bl.y + bl.h / 2);
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        // paddle
+        const pd = g.paddle;
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = '#88ccff';
+        ctx.shadowBlur = 14;
+        const pg = ctx.createLinearGradient(pd.x, pd.y, pd.x, pd.y + pd.h);
+        pg.addColorStop(0, '#aaddff');
+        pg.addColorStop(1, '#3377bb');
+        ctx.fillStyle = pg;
+        ctx.beginPath();
+        ctx.roundRect(pd.x, pd.y, pd.w, pd.h, 5);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // balls
+        for (const b of g.balls) {
+          ctx.shadowColor = '#aaddff';
+          ctx.shadowBlur = 16;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, BR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // capsules
+        for (const cap of g.capsules) {
+          ctx.shadowColor = BONUS_COLORS[cap.type];
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = BONUS_COLORS[cap.type];
+          ctx.beginPath();
+          ctx.roundRect(cap.x - 13, cap.y - 9, 26, 18, 7);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(BONUS_ICONS[cap.type], cap.x, cap.y);
+        }
+
+        // bullets
+        for (const bu of g.bullets) {
+          ctx.shadowColor = '#ffcc00';
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = '#ffcc00';
+          ctx.fillRect(bu.x - 2, bu.y - 8, 4, 14);
+          ctx.shadowBlur = 0;
+        }
+
+        // HUD bar
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#0a0a1ecc';
+        ctx.fillRect(0, 0, GW, 32);
+        ctx.globalAlpha = 1;
+        ctx.font = 'bold 12px Orbitron, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#aaddff';
+        ctx.textAlign = 'left';
+        ctx.fillText('NVX ' + (g.level + 1) + '/5', 8, 16);
+        ctx.fillStyle = '#ffd700';
+        ctx.textAlign = 'center';
+        ctx.fillText('SCORE ' + g.score, GW / 2, 16);
+        ctx.textAlign = 'right';
+        const hearts = '❤'.repeat(Math.max(0, g.lives));
+        ctx.fillStyle = '#ff4466';
+        ctx.fillText(hearts, GW - 8, 16);
+
+        // launch hint
+        if (!g.started && !g.lost && !g.won) {
+          ctx.fillStyle = '#00000099';
+          ctx.fillRect(0, GH / 2 - 36, GW, 72);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 15px Orbitron, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('CLIQUER / TOUCHER', GW / 2, GH / 2 - 10);
+          ctx.font = '11px Orbitron, sans-serif';
+          ctx.fillStyle = '#aaaaaa';
+          ctx.fillText('pour lancer la balle', GW / 2, GH / 2 + 14);
+        }
+
+        // game over / win overlay
+        if (g.lost || g.won) {
+          ctx.fillStyle = '#000000cc';
+          ctx.fillRect(0, 0, GW, GH);
+          ctx.fillStyle = g.won ? '#ffd700' : '#ff4466';
+          ctx.font = 'bold 30px Orbitron, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(g.won ? 'VICTOIRE !' : 'GAME OVER', GW / 2, GH / 2 - 28);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '15px Orbitron, sans-serif';
+          ctx.fillText('Score : ' + g.score, GW / 2, GH / 2 + 10);
+          ctx.font = '11px Orbitron, sans-serif';
+          ctx.fillStyle = '#aaaaaa';
+          ctx.fillText('Cliquer pour rejouer', GW / 2, GH / 2 + 42);
+        }
+      }
+
+      React.useEffect(() => {
+        const cv = cvRef.current;
+        const ctx = cv.getContext('2d');
+        stRef.current = initGame();
+
+        function loop() {
+          update(stRef.current);
+          draw(ctx, stRef.current);
+          rafRef.current = requestAnimationFrame(loop);
+        }
+        rafRef.current = requestAnimationFrame(loop);
+
+        function getX(e) {
+          const rect = cv.getBoundingClientRect();
+          const cx = e.touches ? e.touches[0].clientX : e.clientX;
+          return (cx - rect.left) * (GW / rect.width);
+        }
+        function onMove(e) {
+          const g = stRef.current;
+          if (g.lost || g.won) return;
+          const x = getX(e);
+          g.paddle.x = Math.max(0, Math.min(GW - g.paddle.w, x - g.paddle.w / 2));
+          e.preventDefault && e.preventDefault();
+        }
+        function onTap() {
+          const g = stRef.current;
+          if (g.lost || g.won) { stRef.current = initGame(); return; }
+          if (!g.started) g.started = true;
+        }
+        cv.addEventListener('mousemove', onMove);
+        cv.addEventListener('touchmove', onMove, { passive: false });
+        cv.addEventListener('click', onTap);
+        cv.addEventListener('touchstart', onTap, { passive: true });
+        return () => {
+          cancelAnimationFrame(rafRef.current);
+          cv.removeEventListener('mousemove', onMove);
+          cv.removeEventListener('touchmove', onMove);
+          cv.removeEventListener('click', onTap);
+          cv.removeEventListener('touchstart', onTap);
         };
-        rafRef.current=requestAnimationFrame(loop);
-        return()=>{cancelAnimationFrame(rafRef.current);};
-      },[phase]);
-      useEffect(()=>{draw();},[]);
+      }, []);
 
-      /* ── UI ── */
       return (
-        <div className="w-full flex flex-col items-center px-3 py-2 select-none overflow-hidden"
-             style={{height:'100dvh',background:'radial-gradient(circle at 30% 10%,#0a3060 0%,#041018 60%)',position:'relative'}}>
-          <div className="blob" style={{width:200,height:200,background:'#1155aa',top:-60,left:-50}}/>
-          <div className="blob" style={{width:160,height:160,background:'#ffd700',bottom:80,right:-40,animationDelay:'4s'}}/>
-
-          <div className="w-full max-w-full lg:max-w-3xl flex items-center justify-between mb-1 z-10" style={{flexShrink:0}}>
-            <div className="flex items-center gap-3">
-              <button onClick={onBack} style={{fontFamily:'Orbitron,sans-serif',fontSize:'.58rem',color:'#666',border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',borderRadius:'8px',padding:'4px 10px',cursor:'pointer'}}>← MENU</button>
-              <div>
-                <h1 className="font-black tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.1rem',color:'#ffd700',textShadow:'0 0 10px #ffd700'}}>CANON BREAK</h1>
-                <div className="flex items-center gap-1 mt-0.5">
-                  {[0,1,2,3,4].map(i=><span key={i} style={{fontSize:'.9rem',opacity:i<uiHp?1:.15,filter:i<uiHp?'drop-shadow(0 0 5px #ff2244)':'none',transition:'opacity .3s'}}>❤️</span>)}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="score-text font-black" style={{fontSize:'1.6rem',lineHeight:1}}>{uiSc}</p>
-              <div style={{fontFamily:'Orbitron,sans-serif',fontSize:'.55rem',fontWeight:900,color:'#ffd700'}}>NV {uiLv} · {LNAMES[uiLv-1]||''}</div>
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#05050f', fontFamily: 'Orbitron, sans-serif' }}>
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', background: '#0a0a1a', borderBottom: '1px solid #1a1a2e' }}>
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: 'Orbitron, sans-serif', fontSize: '11px' }}>◀ MENU</button>
+            <span style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>CANON BREAK</span>
+            <div style={{ width: '60px' }} />
           </div>
-
-          <div className="relative w-full max-w-full lg:max-w-3xl rounded-2xl overflow-hidden z-10" style={{flex:1,minHeight:0}}>
-            <canvas ref={cvsRef} width={GW} height={GH} style={{width:'100%',height:'100%',display:'block',touchAction:'none'}}/>
-            {phase==='menu'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.92)',backdropFilter:'blur(4px)'}}>
-                <p className="text-5xl mb-3">💣</p>
-                <h2 className="font-black mb-2 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.8rem',color:'#ffd700',textShadow:'0 0 20px #ffd700'}}>CANON BREAK</h2>
-                <p className="text-slate-300 text-center text-sm mb-3 px-8 leading-relaxed">Détruis tous les blocs !<br/>5 niveaux — Grille · Pyramide · Damier · Vagues · Boss</p>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-4 text-center" style={{fontSize:'.65rem',fontFamily:'Orbitron,sans-serif'}}>
-                  <span style={{color:'#00ff88'}}>⚓ Barque large</span>
-                  <span style={{color:'#ff2244'}}>❤️ +1 vie</span>
-                </div>
-                <button onClick={newGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>JOUER ▶</button>
-              </div>
-            )}
-            {phase==='next'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.94)',backdropFilter:'blur(4px)'}}>
-                <p className="text-5xl mb-2">🏅</p>
-                <h2 className="font-black mb-1 tracking-widest" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.5rem',color:'#ffd700',textShadow:'0 0 20px #ffd700'}}>NIVEAU TERMINÉ !</h2>
-                <p className="font-black mb-3" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1rem',color:'#00ff88'}}>{LNAMES[uiLv]||'BOSS'}</p>
-                <p className="score-text font-black mb-4" style={{fontSize:'2rem'}}>{uiSc}</p>
-                <button onClick={()=>{const g=gRef.current;startLevel(g.lv+1,g.score,g.lives);}} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>CONTINUER ▶</button>
-              </div>
-            )}
-            {phase==='over'&&(
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{background:'rgba(4,16,24,.94)',backdropFilter:'blur(4px)'}}>
-                <p className="text-4xl mb-3">{won?'🏆':'💥'}</p>
-                <h2 className="font-black mb-2" style={{fontFamily:'Orbitron,sans-serif',fontSize:'1.9rem',color:won?'#ffd700':'#ff4444',textShadow:`0 0 20px ${won?'#ffd700':'#ff4444'}`}}>{won?'VICTOIRE !':'NAUFRAGE !'}</h2>
-                <p className="score-text font-black mb-4" style={{fontSize:'2.4rem'}}>{uiSc}</p>
-                <button onClick={newGame} className="rounded-full px-10 py-4 text-xl font-black text-black" style={{background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 30px #ffd700',fontFamily:'Orbitron,sans-serif'}}>REJOUER ▶</button>
-              </div>
-            )}
-          </div>
-
-          <div className="w-full max-w-full lg:max-w-3xl mt-2 mb-2 z-10 grid grid-cols-2 gap-2" style={{flexShrink:0}}>
-            <button onPointerDown={()=>{movRef.current=-1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=-1;}} onTouchEnd={()=>{movRef.current=0;}}
-              className="rounded-2xl text-2xl text-white font-black" style={{padding:'14px 0',background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 20px rgba(255,215,0,.5)',userSelect:'none'}}>◄◄</button>
-            <button onPointerDown={()=>{movRef.current=1;}} onPointerUp={()=>{movRef.current=0;}} onPointerLeave={()=>{movRef.current=0;}} onTouchStart={(e)=>{e.preventDefault();movRef.current=1;}} onTouchEnd={()=>{movRef.current=0;}}
-              className="rounded-2xl text-2xl text-white font-black" style={{padding:'14px 0',background:'linear-gradient(135deg,#ffd700,#ff8800)',boxShadow:'0 0 20px rgba(255,215,0,.5)',userSelect:'none'}}>►►</button>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05050f' }}>
+            <div style={{ position: 'relative', height: '100%', aspectRatio: `${GW}/${GH}`, maxWidth: '100%', maxHeight: '100%', borderRadius: '10px', overflow: 'hidden' }}>
+              <canvas ref={cvRef} width={GW} height={GH} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
+            </div>
           </div>
         </div>
       );
