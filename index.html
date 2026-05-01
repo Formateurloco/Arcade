@@ -1410,35 +1410,83 @@
       const [won,setWon]=useState(false);
 
       /* ── helpers ── */
-      function mkBall(x,y){
+      function mkBall(x,y,spd){
         const a=-Math.PI/2+(Math.random()-.5)*0.75;
-        return{x,y,vx:Math.cos(a)*4.5,vy:Math.sin(a)*4.5};
+        const s=spd||4.5;
+        return{x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s};
       }
       function mkBlk(x,y,hp,col,pts,bon){
         return{x,y,w:BW-4,h:BH,hp,maxHp:hp,color:col,pts,bonus:bon||null};
       }
 
-      /* ── niveaux ── */
+      /* ── niveaux : 5 formes distinctes ── */
       function buildLevel(n){
-        const sy=50,S=BH+BGAP,bs=[];
-        const defs=[
-          [['#aa44ff',30,2,null],['#ff3344',20,2,null],['#00cc66',15,1,'wide'],['#22aaff',12,1,null],['#ffcc00',10,1,'life']],
-          [['#ff0055',45,3,null],['#aa44ff',35,2,null],['#ff3344',22,2,null],['#00cc66',16,1,'wide'],['#ffcc00',12,1,'life']],
-          [['#ff0055',55,3,null],['#aa44ff',42,3,null],['#ff3344',28,2,null],['#00cc66',20,2,'wide'],['#22aaff',15,1,null],['#ffcc00',10,1,'life']],
-          [['#ff0055',65,4,null],['#aa44ff',50,3,null],['#ff3344',35,3,null],['#00cc66',22,2,'wide'],['#22aaff',16,2,null],['#ffcc00',12,1,'life']],
-          [['#ff0055',80,4,null],['#aa44ff',60,4,null],['#ff3344',45,3,null],['#ff8800',30,3,null],['#00cc66',20,2,'wide'],['#22aaff',14,2,null],['#ffcc00',10,1,'life']],
-        ];
-        defs[Math.min(n,4)].forEach(([c,p,h,b],r)=>{
-          for(let cl=0;cl<BCOLS;cl++)bs.push(mkBlk(8+cl*BW,sy+r*S,h,c,p,b));
-        });
+        const sy=48,S=26,bs=[];
+        const X=c=>8+c*BW;
+
+        if(n===0){
+          // GRILLE : rectangle plein 5×8
+          const clrs=['#aa44ff','#ff3344','#00cc66','#22aaff','#ffcc00'];
+          const hps=[2,2,1,1,1];
+          const bon=[null,null,'wide',null,'life'];
+          for(let r=0;r<5;r++) for(let c=0;c<BCOLS;c++)
+            bs.push(mkBlk(X(c),sy+r*S,hps[r],clrs[r],10+r*5,c===4?bon[r]:null));
+
+        }else if(n===1){
+          // PYRAMIDE : losange centré
+          const shape=[[3,4],[2,5],[1,6],[0,7],[1,6],[2,5]];
+          const clrs=['#ff0055','#aa44ff','#ff3344','#22aaff','#00cc66','#ffcc00'];
+          shape.forEach(([from,to],r)=>{
+            for(let c=from;c<=to;c++)
+              bs.push(mkBlk(X(c),sy+r*S,r<3?3:2,clrs[r],20+r*8,
+                r===3&&c===0?'life':r===3&&c===7?'wide':null));
+          });
+
+        }else if(n===2){
+          // DAMIER : cases alternées
+          const clrs=['#ff0055','#22aaff','#00cc66','#ff8800','#aa44ff','#ffcc00'];
+          for(let r=0;r<6;r++) for(let c=0;c<BCOLS;c++){
+            if((r+c)%2===0)
+              bs.push(mkBlk(X(c),sy+r*S,3,clrs[r],25+r*10,
+                r===0&&c===0?'life':r===5&&c===6?'wide':null));
+          }
+
+        }else if(n===3){
+          // VAGUES : décalage sinusoïdal par colonne
+          const clrs=['#ff0055','#aa44ff','#22aaff','#00cc66','#ffcc00'];
+          for(let c=0;c<BCOLS;c++){
+            const yOff=Math.round(Math.sin(c/BCOLS*Math.PI*2)*2)+2;
+            for(let r=0;r<5;r++)
+              bs.push(mkBlk(X(c),sy+(r+yOff)*S,3,clrs[r],30+r*12,
+                r===0&&c===0?'life':r===4&&c===7?'wide':null));
+          }
+
+        }else{
+          // BOSS : diamant dense HP×4
+          const pat=[
+            [0,0,0,1,1,0,0,0],
+            [0,0,1,1,1,1,0,0],
+            [0,1,1,1,1,1,1,0],
+            [1,1,1,1,1,1,1,1],
+            [0,1,1,1,1,1,1,0],
+            [0,0,1,1,1,1,0,0],
+            [0,0,0,1,1,0,0,0],
+          ];
+          pat.forEach((row,r)=>row.forEach((has,c)=>{
+            if(has) bs.push(mkBlk(X(c),sy+r*S,4,c<4?'#ff0055':'#aa44ff',50,
+              r===3&&c===0?'life':r===3&&c===7?'wide':null));
+          }));
+        }
         return bs;
       }
 
       function startLevel(n,sc,hp){
         const pad={x:(GW-100)/2,y:GH-50,w:100};
+        const ballSpd=4.5+n*0.8;
         gRef.current={
           lv:n,score:sc||0,lives:hp||3,
-          balls:[mkBall(GW/2,GH-80)],
+          balls:[mkBall(GW/2,GH-80,ballSpd)],
+          ballSpd,
           pad,
           blocks:buildLevel(n),
           drops:[],
@@ -1488,6 +1536,7 @@
       /* ── update ── */
       function update(){
         const g=gRef.current;if(!g)return;
+        g.blocks.forEach(bl=>{bl._hit=false;});
         // Palette
         if(movRef.current<0)g.pad.x=Math.max(0,g.pad.x-6);
         if(movRef.current>0)g.pad.x=Math.min(GW-g.pad.w,g.pad.x+6);
@@ -1524,10 +1573,12 @@
             b.vx=Math.sin(a)*sp;
             b.vy=-Math.abs(Math.cos(a)*sp);
           }
-          // Blocs (test cercle/rectangle)
+          // Blocs — un seul hit par bloc par frame
           for(let i=g.blocks.length-1;i>=0;i--){
-            if(resolveBlock(b,g.blocks[i])){
-              const bl=g.blocks[i];
+            const bl=g.blocks[i];
+            if(bl._hit) continue;
+            if(resolveBlock(b,bl)){
+              bl._hit=true;
               bl.hp--;
               if(bl.hp<=0){
                 const bon=(bl.bonus&&BNUS[bl.bonus]&&!g.spawned.has(bl.bonus))
@@ -1551,7 +1602,7 @@
         if(anyLost&&g.balls.length===0){
           g.lives--;setUiHp(g.lives);playMiss();
           if(g.lives<=0){phsRef.current='over';setPhase('over');return;}
-          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-BR-2)];
+          g.balls=[mkBall(g.pad.x+g.pad.w/2,g.pad.y-BR-2,g.ballSpd)];
         }
         if(g.blocks.length===0){
           if(g.lv<4){phsRef.current='next';setPhase('next');}
