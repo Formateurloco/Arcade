@@ -145,6 +145,29 @@
       ctx.closePath();
     }
 
+    // ── Fullscreen helper ─────────────────────────────────────────────────────
+    function FullscreenBtn() {
+      const [fs, setFs] = React.useState(!!document.fullscreenElement);
+      React.useEffect(() => {
+        const handler = () => setFs(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', handler);
+        return () => document.removeEventListener('fullscreenchange', handler);
+      }, []);
+      function toggle() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+      return (
+        <button onClick={toggle}
+          style={{ position:'fixed', top:'10px', right:'12px', zIndex:9999, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:'8px', color:'#aaa', padding:'5px 10px', cursor:'pointer', fontFamily:'Orbitron,sans-serif', fontSize:'.6rem', letterSpacing:'.05em', backdropFilter:'blur(4px)' }}>
+          {fs ? '⊠ EXIT' : '⛶ FULL'}
+        </button>
+      );
+    }
+
     // ── Menu ─────────────────────────────────────────────────────────────────
     function MenuScreen({ onSelect }) {
       return (
@@ -215,6 +238,10 @@
               <span className="text-slate-500 mt-2 text-center" style={{ fontSize:'.65rem', lineHeight:'1.4' }}>Échappe aux chiens dans le labyrinthe !</span>
             </button>
           </div>
+
+          <p className="z-10 mt-8" style={{ fontFamily:'Orbitron,sans-serif', fontSize:'.5rem', letterSpacing:'.12em', color:'#333', textAlign:'center' }}>
+            © DROITS RÉSERVÉS · BY ELOCOOH
+          </p>
         </div>
       );
     }
@@ -2093,14 +2120,16 @@
         // ── App ───────────────────────────────────────────────────────────────────
     function App() {
       const [screen, setScreen] = useState('menu');
-      if (screen === 'menu')     return <MenuScreen onSelect={setScreen}/>;
-      if (screen === 'neonbeat') return <RhythmGame onBack={() => setScreen('menu')}/>;
-      if (screen === 'snake')    return <SnakeGame  onBack={() => setScreen('menu')}/>;
-      if (screen === 'dog')      return <DogGame    onBack={() => setScreen('menu')}/>;
-      if (screen === 'candy')       return <CandyGame    onBack={() => setScreen('menu')}/>;
-      if (screen === 'pirate')      return <PirateGame   onBack={() => setScreen('menu')}/>;
-      if (screen === 'cannonbreak') return <CannonBreak  onBack={() => setScreen('menu')}/>;
-      if (screen === 'chattraque')  return <ChatTraque   onBack={() => setScreen('menu')}/>;
+      let content;
+      if (screen === 'menu')        content = <MenuScreen onSelect={setScreen}/>;
+      else if (screen === 'neonbeat')    content = <RhythmGame onBack={() => setScreen('menu')}/>;
+      else if (screen === 'snake')       content = <SnakeGame  onBack={() => setScreen('menu')}/>;
+      else if (screen === 'dog')         content = <DogGame    onBack={() => setScreen('menu')}/>;
+      else if (screen === 'candy')       content = <CandyGame    onBack={() => setScreen('menu')}/>;
+      else if (screen === 'pirate')      content = <PirateGame   onBack={() => setScreen('menu')}/>;
+      else if (screen === 'cannonbreak') content = <CannonBreak  onBack={() => setScreen('menu')}/>;
+      else if (screen === 'chattraque')  content = <ChatTraque   onBack={() => setScreen('menu')}/>;
+      return <>{content}<FullscreenBtn/></>;
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
