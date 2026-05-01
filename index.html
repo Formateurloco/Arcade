@@ -1401,24 +1401,26 @@
       const stRef = React.useRef(null);
 
       const GW = 360, GH = 540;
-      const BR = 8;
-      const PH = 12;
+      const BR = 9;
+      const PH = 13;
       const BASE_W = 100;
-      const BH = 16;
+      const BH = 17;
       const BCOLS = 8;
       const BM = 8;
       const BW = Math.floor((GW - 2 * BM) / BCOLS);
 
-      const BONUS_COLORS = { life: '#ff4466', wide: '#44ffaa', narrow: '#ffaa44', multi: '#8866ff', cannon: '#ff6600' };
-      const BONUS_ICONS = { life: '❤', wide: '⟺', narrow: '↔', multi: '⊗', cannon: '●' };
-      const BONUS_TYPES = ['life', 'wide', 'narrow', 'multi', 'cannon'];
+      // Bonus types — pirate flavour
+      const BONUS_COLORS = { life:'#ff4466', wide:'#c8860a', narrow:'#8b5e3c', multi:'#e8c200', cannon:'#ff5500' };
+      const BONUS_ICONS  = { life:'❤', wide:'🪵', narrow:'⚓', multi:'💣', cannon:'🔥' };
+      const BONUS_TYPES  = ['life','wide','narrow','multi','cannon'];
 
+      // Brick colour palettes — treasure / pirate tones
       const PALETTES = [
-        ['#ff4466', '#ff6644', '#ffaa22', '#44ff88', '#22aaff', '#cc44ff'],
-        ['#8866ff', '#aa44ff', '#ff44aa', '#ff6622', '#ffcc00', '#44ffcc'],
-        ['#00ffcc', '#00aaff', '#ff00aa', '#ffcc00', '#ff4400', '#88ff44'],
-        ['#ff6644', '#ff44cc', '#44ccff', '#88ff44', '#ffaa00', '#ff0088'],
-        ['#ff0044', '#ff4400', '#ffaa00', '#00ff88', '#0088ff', '#cc00ff'],
+        ['#c8860a','#b06a00','#d4a017','#8b4513','#a0522d','#cd853f'], // Coffres dorés
+        ['#8b0000','#a0001a','#cc1122','#7a0000','#b52222','#cc4444'], // Pierre rouge
+        ['#1a5276','#154360','#1f618d','#2874a6','#117a65','#148f77'], // Océan profond
+        ['#4a1a00','#5c2400','#7a3200','#8b4513','#6d2800','#a0522d'], // Bois sombre
+        ['#c0a000','#d4af37','#b8860b','#ffd700','#daa520','#ff8c00'], // Boss : or & flammes
       ];
 
       function pickColor(level, row) {
@@ -1435,42 +1437,41 @@
       }
 
       function buildLevel(n) {
-        const sy = 56;
-        const GAP = 4;
+        const sy = 56, GAP = 4;
         const bs = [];
         const X = c => BM + c * BW;
 
         if (n === 0) {
-          // GRILLE pleine 5 rangées
+          // FORTERESSE : mur plein 5×8
           for (let r = 0; r < 5; r++)
             for (let c = 0; c < BCOLS; c++)
-              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
+              bs.push({ x:X(c), y:sy+r*(BH+GAP), w:BW-3, h:BH, hp:1, maxHp:1, color:pickColor(n,r), bonus:null });
 
         } else if (n === 1) {
-          // PYRAMIDE : losange
+          // PYRAMIDE DE COFFRES
           const rows = [[3,4],[2,5],[1,6],[0,7],[1,6],[2,5],[3,4]];
-          rows.forEach(([lo, hi], r) => {
+          rows.forEach(([lo,hi], r) => {
             for (let c = lo; c <= hi; c++)
-              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
+              bs.push({ x:X(c), y:sy+r*(BH+GAP), w:BW-3, h:BH, hp:1, maxHp:1, color:pickColor(n,r), bonus:null });
           });
 
         } else if (n === 2) {
-          // DAMIER
+          // DAMIER DE CAISSES
           for (let r = 0; r < 6; r++)
             for (let c = 0; c < BCOLS; c++)
-              if ((r + c) % 2 === 0)
-                bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, r), bonus: null });
+              if ((r+c)%2===0)
+                bs.push({ x:X(c), y:sy+r*(BH+GAP), w:BW-3, h:BH, hp:1, maxHp:1, color:pickColor(n,r), bonus:null });
 
         } else if (n === 3) {
-          // VAGUES sinusoïdales
+          // VAGUES DE MER
           for (let c = 0; c < BCOLS; c++) {
             const numRows = 3 + Math.round((Math.sin(c / BCOLS * Math.PI * 2) + 1) * 2);
             for (let r = 0; r < numRows; r++)
-              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp: 1, maxHp: 1, color: pickColor(n, c), bonus: null });
+              bs.push({ x:X(c), y:sy+r*(BH+GAP), w:BW-3, h:BH, hp:1, maxHp:1, color:pickColor(n,c), bonus:null });
           }
 
         } else {
-          // BOSS : pattern en croix / forteresse
+          // FORTERESSE DU CAPITAINE : pattern en croix renforcé
           const pattern = [
             [0,1,0,1,1,1,0,1],
             [1,0,1,1,1,1,0,1],
@@ -1484,16 +1485,15 @@
           pattern.forEach((row, r) => {
             row.forEach((v, c) => {
               if (!v) return;
-              const isCore = r >= 3 && r <= 4 && c >= 3 && c <= 4;
-              const hp = isCore ? 3 : (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 2 : 1;
-              bs.push({ x: X(c), y: sy + r * (BH + GAP), w: BW - 3, h: BH, hp, maxHp: hp, color: pickColor(n, r), bonus: null });
+              const isCore = r>=3&&r<=4&&c>=3&&c<=4;
+              const hp = isCore ? 3 : (r>=2&&r<=5&&c>=2&&c<=5) ? 2 : 1;
+              bs.push({ x:X(c), y:sy+r*(BH+GAP), w:BW-3, h:BH, hp, maxHp:hp, color:pickColor(n,r), bonus:null });
             });
           });
         }
 
-        // 2 bonus au hasard parmi les briques
         const bonusPool = shuffle([...BONUS_TYPES]).slice(0, 2);
-        const idxPool = shuffle([...Array(bs.length).keys()]).slice(0, 2);
+        const idxPool   = shuffle([...Array(bs.length).keys()]).slice(0, 2);
         idxPool.forEach((i, k) => { bs[i].bonus = bonusPool[k]; });
         return bs;
       }
@@ -1501,353 +1501,356 @@
       function mkBall(n) {
         const spd = 4.5 + n * 0.6;
         const ang = (Math.random() - 0.5) * 0.8;
-        return { x: GW / 2, y: GH - 60, vx: Math.sin(ang) * spd, vy: -Math.abs(Math.cos(ang) * spd) };
+        return { x:GW/2, y:GH-64, vx:Math.sin(ang)*spd, vy:-Math.abs(Math.cos(ang)*spd) };
       }
 
       function initGame() {
         return {
-          level: 0,
-          blocks: buildLevel(0),
-          balls: [mkBall(0)],
-          paddle: { x: GW / 2 - BASE_W / 2, y: GH - 40, w: BASE_W, h: PH },
-          capsules: [],
-          bullets: [],
-          wideTimer: 0,
-          narrowTimer: 0,
-          lives: 3,
-          score: 0,
-          started: false,
-          lost: false,
-          won: false,
+          level:0, blocks:buildLevel(0), balls:[mkBall(0)],
+          paddle:{ x:GW/2-BASE_W/2, y:GH-42, w:BASE_W, h:PH },
+          capsules:[], bullets:[], wideTimer:0, narrowTimer:0,
+          lives:3, score:0, started:false, lost:false, won:false,
+          smoke:[], // {x,y,r,a} cannonball smoke particles
         };
       }
 
       function overlaps(bx, by, bl) {
-        return bx + BR > bl.x && bx - BR < bl.x + bl.w && by + BR > bl.y && by - BR < bl.y + bl.h;
+        return bx+BR>bl.x && bx-BR<bl.x+bl.w && by+BR>bl.y && by-BR<bl.y+bl.h;
       }
 
       function doHit(g, bl, idx) {
         bl.hp--;
         g.score += 10;
         if (bl.hp <= 0) {
-          if (bl.bonus) g.capsules.push({ x: bl.x + bl.w / 2, y: bl.y + bl.h, type: bl.bonus, vy: 2.5 });
+          if (bl.bonus) g.capsules.push({ x:bl.x+bl.w/2, y:bl.y+bl.h, type:bl.bonus, vy:2.5 });
           g.blocks.splice(idx, 1);
         }
+        // smoke puff at hit position
+        g.smoke.push({ x:bl.x+bl.w/2, y:bl.y+bl.h/2, r:6, a:0.7 });
       }
 
       function applyBonus(g, type) {
-        if (type === 'life') {
-          g.lives = Math.min(g.lives + 1, 9);
-        } else if (type === 'wide') {
-          g.paddle.w = Math.min(BASE_W * 1.8, GW * 0.7);
-          g.wideTimer = 600; g.narrowTimer = 0;
-        } else if (type === 'narrow') {
-          g.paddle.w = Math.max(BASE_W * 0.4, 40);
-          g.narrowTimer = 600; g.wideTimer = 0;
-        } else if (type === 'multi') {
-          const extras = [];
-          g.balls.slice(0, 2).forEach(b => {
-            extras.push({ x: b.x, y: b.y, vx: -b.vx * 0.95 + 0.5, vy: b.vy });
-            extras.push({ x: b.x, y: b.y, vx: b.vx * 0.95 - 0.5, vy: b.vy * 0.95 });
+        if (type==='life')   { g.lives = Math.min(g.lives+1, 9); }
+        else if (type==='wide')   { g.paddle.w=Math.min(BASE_W*1.8, GW*0.7); g.wideTimer=600; g.narrowTimer=0; }
+        else if (type==='narrow') { g.paddle.w=Math.max(BASE_W*0.4, 40); g.narrowTimer=600; g.wideTimer=0; }
+        else if (type==='multi')  {
+          const extras=[];
+          g.balls.slice(0,2).forEach(b => {
+            extras.push({ x:b.x, y:b.y, vx:-b.vx*0.95+0.5, vy:b.vy });
+            extras.push({ x:b.x, y:b.y, vx:b.vx*0.95-0.5,  vy:b.vy*0.95 });
           });
           g.balls.push(...extras);
-        } else if (type === 'cannon') {
-          for (let i = 0; i < 5; i++)
-            g.bullets.push({ x: g.paddle.x + (i + 1) * g.paddle.w / 6, y: g.paddle.y });
+        } else if (type==='cannon') {
+          for (let i=0; i<5; i++)
+            g.bullets.push({ x:g.paddle.x+(i+1)*g.paddle.w/6, y:g.paddle.y });
         }
       }
 
       function update(g) {
-        if (!g.started || g.lost || g.won) return;
+        if (!g.started||g.lost||g.won) return;
         const spd = 4.5 + g.level * 0.6;
 
         // bonus timers
-        if (g.wideTimer > 0 && --g.wideTimer === 0) g.paddle.w = BASE_W;
-        if (g.narrowTimer > 0 && --g.narrowTimer === 0) g.paddle.w = BASE_W;
+        if (g.wideTimer>0   && --g.wideTimer===0)   g.paddle.w=BASE_W;
+        if (g.narrowTimer>0 && --g.narrowTimer===0) g.paddle.w=BASE_W;
+
+        // smoke fade
+        for (let i=g.smoke.length-1; i>=0; i--) {
+          const s=g.smoke[i];
+          s.r+=0.6; s.a-=0.06;
+          if (s.a<=0) g.smoke.splice(i,1);
+        }
 
         // bullets
-        for (let i = g.bullets.length - 1; i >= 0; i--) {
+        for (let i=g.bullets.length-1; i>=0; i--) {
           g.bullets[i].y -= 9;
-          if (g.bullets[i].y < 0) { g.bullets.splice(i, 1); continue; }
-          const bu = g.bullets[i];
-          let hit = false;
-          for (let j = g.blocks.length - 1; j >= 0; j--) {
-            const bl = g.blocks[j];
-            if (bu.x > bl.x && bu.x < bl.x + bl.w && bu.y > bl.y && bu.y < bl.y + bl.h) {
-              doHit(g, bl, j); hit = true; break;
+          if (g.bullets[i].y<0) { g.bullets.splice(i,1); continue; }
+          const bu=g.bullets[i];
+          let hit=false;
+          for (let j=g.blocks.length-1; j>=0; j--) {
+            const bl=g.blocks[j];
+            if (bu.x>bl.x&&bu.x<bl.x+bl.w&&bu.y>bl.y&&bu.y<bl.y+bl.h) {
+              doHit(g,bl,j); hit=true; break;
             }
           }
-          if (hit) g.bullets.splice(i, 1);
+          if (hit) g.bullets.splice(i,1);
         }
 
         // capsules
-        for (let i = g.capsules.length - 1; i >= 0; i--) {
-          const cap = g.capsules[i];
-          cap.y += cap.vy;
-          const pd = g.paddle;
-          if (cap.y + 8 > pd.y && cap.y - 8 < pd.y + pd.h && cap.x > pd.x && cap.x < pd.x + pd.w) {
-            applyBonus(g, cap.type); g.capsules.splice(i, 1); continue;
+        for (let i=g.capsules.length-1; i>=0; i--) {
+          const cap=g.capsules[i];
+          cap.y+=cap.vy;
+          const pd=g.paddle;
+          if (cap.y+8>pd.y&&cap.y-8<pd.y+pd.h&&cap.x>pd.x&&cap.x<pd.x+pd.w) {
+            applyBonus(g,cap.type); g.capsules.splice(i,1); continue;
           }
-          if (cap.y > GH + 20) g.capsules.splice(i, 1);
+          if (cap.y>GH+20) g.capsules.splice(i,1);
         }
 
         // balls — split axis
-        for (let bi = g.balls.length - 1; bi >= 0; bi--) {
-          const b = g.balls[bi];
-          const bspd = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || spd;
-          b.vx = b.vx / bspd * spd;
-          b.vy = b.vy / bspd * spd;
+        for (let bi=g.balls.length-1; bi>=0; bi--) {
+          const b=g.balls[bi];
+          const bspd=Math.sqrt(b.vx*b.vx+b.vy*b.vy)||spd;
+          b.vx=b.vx/bspd*spd; b.vy=b.vy/bspd*spd;
 
-          // ── X axis ──
-          b.x += b.vx;
-          if (b.x - BR < 0)  { b.x = BR;      b.vx = Math.abs(b.vx); }
-          if (b.x + BR > GW) { b.x = GW - BR; b.vx = -Math.abs(b.vx); }
-          for (let j = g.blocks.length - 1; j >= 0; j--) {
-            const bl = g.blocks[j];
-            if (overlaps(b.x, b.y, bl)) {
-              b.vx = -b.vx;
-              b.x = b.vx > 0 ? bl.x + bl.w + BR : bl.x - BR;
-              doHit(g, bl, j); break;
+          // ── X ──
+          b.x+=b.vx;
+          if (b.x-BR<0)  { b.x=BR;      b.vx=Math.abs(b.vx); }
+          if (b.x+BR>GW) { b.x=GW-BR;   b.vx=-Math.abs(b.vx); }
+          for (let j=g.blocks.length-1; j>=0; j--) {
+            const bl=g.blocks[j];
+            if (overlaps(b.x,b.y,bl)) {
+              b.vx=-b.vx;
+              b.x = b.vx>0 ? bl.x+bl.w+BR : bl.x-BR;
+              doHit(g,bl,j); break;
             }
           }
 
-          // ── Y axis ──
-          b.y += b.vy;
-          if (b.y - BR < 0) { b.y = BR; b.vy = Math.abs(b.vy); }
-          // paddle
-          const pd = g.paddle;
-          if (b.vy > 0 && b.y + BR >= pd.y && b.y - BR <= pd.y + pd.h && b.x + BR > pd.x && b.x - BR < pd.x + pd.w) {
-            b.y = pd.y - BR;
-            const rel = (b.x - pd.x) / pd.w - 0.5;
-            const ang = rel * 2.0;
-            b.vx = Math.sin(ang) * spd;
-            b.vy = -Math.abs(Math.cos(ang) * spd || spd * 0.3);
+          // ── Y ──
+          b.y+=b.vy;
+          if (b.y-BR<0) { b.y=BR; b.vy=Math.abs(b.vy); }
+          const pd=g.paddle;
+          if (b.vy>0&&b.y+BR>=pd.y&&b.y-BR<=pd.y+pd.h&&b.x+BR>pd.x&&b.x-BR<pd.x+pd.w) {
+            b.y=pd.y-BR;
+            const rel=(b.x-pd.x)/pd.w-0.5;
+            const ang=rel*2.0;
+            b.vx=Math.sin(ang)*spd;
+            b.vy=-Math.abs(Math.cos(ang)*spd||spd*0.3);
           }
-          // blocks Y
-          for (let j = g.blocks.length - 1; j >= 0; j--) {
-            const bl = g.blocks[j];
-            if (overlaps(b.x, b.y, bl)) {
-              b.vy = -b.vy;
-              b.y = b.vy > 0 ? bl.y + bl.h + BR : bl.y - BR;
-              doHit(g, bl, j); break;
+          for (let j=g.blocks.length-1; j>=0; j--) {
+            const bl=g.blocks[j];
+            if (overlaps(b.x,b.y,bl)) {
+              b.vy=-b.vy;
+              b.y = b.vy>0 ? bl.y+bl.h+BR : bl.y-BR;
+              doHit(g,bl,j); break;
             }
           }
-
-          // ball lost
-          if (b.y - BR > GH) g.balls.splice(bi, 1);
+          if (b.y-BR>GH) g.balls.splice(bi,1);
         }
 
         // all balls lost
-        if (g.balls.length === 0) {
+        if (g.balls.length===0) {
           g.lives--;
-          if (g.lives <= 0) { g.lost = true; return; }
-          g.balls = [mkBall(g.level)];
-          g.started = false;
+          if (g.lives<=0) { g.lost=true; return; }
+          g.balls=[mkBall(g.level)]; g.started=false;
         }
 
         // level clear
-        if (g.blocks.length === 0) {
+        if (g.blocks.length===0) {
           g.level++;
-          if (g.level >= 5) { g.won = true; return; }
-          g.blocks = buildLevel(g.level);
-          g.balls = [mkBall(g.level)];
-          g.capsules = []; g.bullets = [];
-          g.wideTimer = 0; g.narrowTimer = 0;
-          g.paddle.w = BASE_W;
-          g.started = false;
+          if (g.level>=5) { g.won=true; return; }
+          g.blocks=buildLevel(g.level);
+          g.balls=[mkBall(g.level)];
+          g.capsules=[]; g.bullets=[];
+          g.wideTimer=0; g.narrowTimer=0;
+          g.paddle.w=BASE_W; g.started=false;
         }
       }
 
       function draw(ctx, g) {
-        ctx.clearRect(0, 0, GW, GH);
-        ctx.fillStyle = '#05050f';
-        ctx.fillRect(0, 0, GW, GH);
+        // Ocean background gradient
+        const bg=ctx.createLinearGradient(0,0,0,GH);
+        bg.addColorStop(0,'#04101e');
+        bg.addColorStop(0.5,'#061828');
+        bg.addColorStop(1,'#040c14');
+        ctx.fillStyle=bg; ctx.fillRect(0,0,GW,GH);
+
+        // Subtle wave lines
+        ctx.strokeStyle='#0a2a40'; ctx.lineWidth=1;
+        for (let y=100; y<GH; y+=28) {
+          ctx.beginPath();
+          for (let x=0; x<=GW; x+=4)
+            ctx.lineTo(x, y+Math.sin(x/22)*3);
+          ctx.stroke();
+        }
 
         // bricks
+        ctx.textBaseline='middle'; ctx.textAlign='center';
         for (const bl of g.blocks) {
-          ctx.globalAlpha = bl.hp < bl.maxHp ? 0.5 : 1;
-          ctx.shadowColor = bl.color;
-          ctx.shadowBlur = 10;
-          const gr = ctx.createLinearGradient(bl.x, bl.y, bl.x, bl.y + bl.h);
-          gr.addColorStop(0, bl.color + 'ee');
-          gr.addColorStop(1, bl.color + '55');
-          ctx.fillStyle = gr;
-          ctx.fillRect(bl.x + 1, bl.y + 1, bl.w - 2, bl.h - 2);
-          ctx.shadowBlur = 0;
+          const dim=bl.hp<bl.maxHp;
+          ctx.globalAlpha=dim?0.55:1;
+          ctx.shadowColor=bl.color; ctx.shadowBlur=8;
+          const gr=ctx.createLinearGradient(bl.x,bl.y,bl.x,bl.y+bl.h);
+          gr.addColorStop(0, bl.color+'ee');
+          gr.addColorStop(1, bl.color+'55');
+          ctx.fillStyle=gr;
+          ctx.fillRect(bl.x+1,bl.y+1,bl.w-2,bl.h-2);
+          // wood plank lines
+          ctx.strokeStyle='#00000033'; ctx.lineWidth=1;
+          ctx.strokeRect(bl.x+1,bl.y+1,bl.w-2,bl.h-2);
+          const mx=bl.x+bl.w/2;
+          ctx.beginPath(); ctx.moveTo(mx,bl.y+2); ctx.lineTo(mx,bl.y+bl.h-2);
+          ctx.stroke();
+          ctx.shadowBlur=0;
           // HP dots
-          if (bl.maxHp > 1) {
-            ctx.globalAlpha = 0.9;
-            ctx.fillStyle = '#ffffff';
-            for (let h = 0; h < bl.hp; h++) {
+          if (bl.maxHp>1) {
+            ctx.globalAlpha=0.9; ctx.fillStyle='#fff';
+            for (let h=0; h<bl.hp; h++) {
               ctx.beginPath();
-              ctx.arc(bl.x + bl.w / 2 + (h - (bl.hp - 1) / 2) * 8, bl.y + bl.h / 2, 2.5, 0, Math.PI * 2);
+              ctx.arc(bl.x+bl.w/2+(h-(bl.hp-1)/2)*8, bl.y+bl.h/2, 2.5, 0, Math.PI*2);
               ctx.fill();
             }
           }
-          // bonus marker
+          // bonus icon
           if (bl.bonus) {
-            ctx.globalAlpha = 1;
-            ctx.fillStyle = BONUS_COLORS[bl.bonus];
-            ctx.font = 'bold 9px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(BONUS_ICONS[bl.bonus], bl.x + bl.w / 2, bl.y + bl.h / 2);
+            ctx.globalAlpha=1;
+            ctx.fillStyle=BONUS_COLORS[bl.bonus];
+            ctx.font='bold 9px sans-serif';
+            ctx.fillText(BONUS_ICONS[bl.bonus], bl.x+bl.w/2, bl.y+bl.h/2);
           }
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha=1;
         }
 
-        // paddle
-        const pd = g.paddle;
-        ctx.globalAlpha = 1;
-        ctx.shadowColor = '#88ccff';
-        ctx.shadowBlur = 14;
-        const pg = ctx.createLinearGradient(pd.x, pd.y, pd.x, pd.y + pd.h);
-        pg.addColorStop(0, '#aaddff');
-        pg.addColorStop(1, '#3377bb');
-        ctx.fillStyle = pg;
-        ctx.beginPath();
-        ctx.roundRect(pd.x, pd.y, pd.w, pd.h, 5);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        // smoke particles
+        for (const s of g.smoke) {
+          ctx.globalAlpha=s.a;
+          ctx.fillStyle='#aaaaaa';
+          ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+          ctx.globalAlpha=1;
+        }
 
-        // balls
+        // paddle — wooden plank
+        const pd=g.paddle;
+        ctx.shadowColor='#8b4513'; ctx.shadowBlur=10;
+        const pg=ctx.createLinearGradient(pd.x,pd.y,pd.x,pd.y+pd.h);
+        pg.addColorStop(0,'#c8860a');
+        pg.addColorStop(0.5,'#8b5e3c');
+        pg.addColorStop(1,'#5c3a1e');
+        ctx.fillStyle=pg;
+        ctx.beginPath(); ctx.roundRect(pd.x,pd.y,pd.w,pd.h,4); ctx.fill();
+        // plank texture lines
+        ctx.strokeStyle='#00000044'; ctx.lineWidth=1;
+        for (let i=1; i<3; i++) {
+          const lx=pd.x+pd.w/3*i;
+          ctx.beginPath(); ctx.moveTo(lx,pd.y+2); ctx.lineTo(lx,pd.y+pd.h-2); ctx.stroke();
+        }
+        ctx.shadowBlur=0;
+
+        // balls — boulets de canon
         for (const b of g.balls) {
-          ctx.shadowColor = '#aaddff';
-          ctx.shadowBlur = 16;
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(b.x, b.y, BR, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          ctx.shadowColor='#888'; ctx.shadowBlur=18;
+          const bg2=ctx.createRadialGradient(b.x-3,b.y-3,1,b.x,b.y,BR);
+          bg2.addColorStop(0,'#777');
+          bg2.addColorStop(0.5,'#444');
+          bg2.addColorStop(1,'#1a1a1a');
+          ctx.fillStyle=bg2;
+          ctx.beginPath(); ctx.arc(b.x,b.y,BR,0,Math.PI*2); ctx.fill();
+          ctx.shadowBlur=0;
+          // shine
+          ctx.fillStyle='rgba(255,255,255,0.25)';
+          ctx.beginPath(); ctx.ellipse(b.x-3,b.y-3,3,2,0,0,Math.PI*2); ctx.fill();
         }
 
         // capsules
+        ctx.textBaseline='middle'; ctx.textAlign='center';
         for (const cap of g.capsules) {
-          ctx.shadowColor = BONUS_COLORS[cap.type];
-          ctx.shadowBlur = 10;
-          ctx.fillStyle = BONUS_COLORS[cap.type];
-          ctx.beginPath();
-          ctx.roundRect(cap.x - 13, cap.y - 9, 26, 18, 7);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(BONUS_ICONS[cap.type], cap.x, cap.y);
+          ctx.shadowColor=BONUS_COLORS[cap.type]; ctx.shadowBlur=12;
+          ctx.fillStyle=BONUS_COLORS[cap.type];
+          ctx.beginPath(); ctx.roundRect(cap.x-14,cap.y-9,28,18,7); ctx.fill();
+          ctx.shadowBlur=0;
+          ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif';
+          ctx.fillText(BONUS_ICONS[cap.type],cap.x,cap.y);
         }
 
-        // bullets
+        // bullets — boulets de canon du bonus
         for (const bu of g.bullets) {
-          ctx.shadowColor = '#ffcc00';
-          ctx.shadowBlur = 8;
-          ctx.fillStyle = '#ffcc00';
-          ctx.fillRect(bu.x - 2, bu.y - 8, 4, 14);
-          ctx.shadowBlur = 0;
+          ctx.shadowColor='#ff6600'; ctx.shadowBlur=10;
+          const br=ctx.createRadialGradient(bu.x,bu.y,1,bu.x,bu.y,5);
+          br.addColorStop(0,'#ff8800'); br.addColorStop(1,'#330000');
+          ctx.fillStyle=br;
+          ctx.beginPath(); ctx.arc(bu.x,bu.y-3,5,0,Math.PI*2); ctx.fill();
+          ctx.shadowBlur=0;
         }
 
-        // HUD bar
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = '#0a0a1ecc';
-        ctx.fillRect(0, 0, GW, 32);
-        ctx.globalAlpha = 1;
-        ctx.font = 'bold 12px Orbitron, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#aaddff';
-        ctx.textAlign = 'left';
-        ctx.fillText('NVX ' + (g.level + 1) + '/5', 8, 16);
-        ctx.fillStyle = '#ffd700';
-        ctx.textAlign = 'center';
-        ctx.fillText('SCORE ' + g.score, GW / 2, 16);
-        ctx.textAlign = 'right';
-        const hearts = '❤'.repeat(Math.max(0, g.lives));
-        ctx.fillStyle = '#ff4466';
-        ctx.fillText(hearts, GW - 8, 16);
+        // HUD banner
+        ctx.globalAlpha=0.88;
+        ctx.fillStyle='#03080fee';
+        ctx.fillRect(0,0,GW,30);
+        ctx.globalAlpha=1;
+        ctx.font='bold 11px Orbitron, sans-serif';
+        ctx.textBaseline='middle'; ctx.textAlign='left';
+        ctx.fillStyle='#c8860a';
+        ctx.fillText('VAGUE '+(g.level+1)+'/5', 8, 15);
+        ctx.fillStyle='#ffd700'; ctx.textAlign='center';
+        ctx.fillText('☠ '+g.score+' pts', GW/2, 15);
+        ctx.fillStyle='#ff4466'; ctx.textAlign='right';
+        ctx.fillText('❤'.repeat(Math.max(0,g.lives)), GW-8, 15);
 
         // launch hint
-        if (!g.started && !g.lost && !g.won) {
-          ctx.fillStyle = '#00000099';
-          ctx.fillRect(0, GH / 2 - 36, GW, 72);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 15px Orbitron, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('CLIQUER / TOUCHER', GW / 2, GH / 2 - 10);
-          ctx.font = '11px Orbitron, sans-serif';
-          ctx.fillStyle = '#aaaaaa';
-          ctx.fillText('pour lancer la balle', GW / 2, GH / 2 + 14);
+        if (!g.started&&!g.lost&&!g.won) {
+          ctx.fillStyle='#00000099'; ctx.fillRect(0,GH/2-38,GW,76);
+          ctx.fillStyle='#ffd700'; ctx.font='bold 16px Orbitron, sans-serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText('⚓  EN JOUE !  ⚓', GW/2, GH/2-12);
+          ctx.fillStyle='#aaaaaa'; ctx.font='11px Orbitron, sans-serif';
+          ctx.fillText('cliquer / toucher pour tirer', GW/2, GH/2+14);
         }
 
-        // game over / win overlay
-        if (g.lost || g.won) {
-          ctx.fillStyle = '#000000cc';
-          ctx.fillRect(0, 0, GW, GH);
-          ctx.fillStyle = g.won ? '#ffd700' : '#ff4466';
-          ctx.font = 'bold 30px Orbitron, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(g.won ? 'VICTOIRE !' : 'GAME OVER', GW / 2, GH / 2 - 28);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '15px Orbitron, sans-serif';
-          ctx.fillText('Score : ' + g.score, GW / 2, GH / 2 + 10);
-          ctx.font = '11px Orbitron, sans-serif';
-          ctx.fillStyle = '#aaaaaa';
-          ctx.fillText('Cliquer pour rejouer', GW / 2, GH / 2 + 42);
+        // win / lose overlay
+        if (g.lost||g.won) {
+          ctx.fillStyle='#000000cc'; ctx.fillRect(0,0,GW,GH);
+          ctx.fillStyle=g.won?'#ffd700':'#ff4466';
+          ctx.font='bold 26px Orbitron, sans-serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(g.won?'VICTOIRE, CAPITAINE !':'NAUFRAGE !', GW/2, GH/2-30);
+          ctx.fillStyle='#ffffff'; ctx.font='15px Orbitron, sans-serif';
+          ctx.fillText('Score : '+g.score+' pts', GW/2, GH/2+8);
+          ctx.fillStyle='#888'; ctx.font='11px Orbitron, sans-serif';
+          ctx.fillText('Cliquer pour rejouer', GW/2, GH/2+40);
         }
       }
 
       React.useEffect(() => {
-        const cv = cvRef.current;
-        const ctx = cv.getContext('2d');
-        stRef.current = initGame();
+        const cv=cvRef.current;
+        const ctx=cv.getContext('2d');
+        stRef.current=initGame();
 
         function loop() {
           update(stRef.current);
-          draw(ctx, stRef.current);
-          rafRef.current = requestAnimationFrame(loop);
+          draw(ctx,stRef.current);
+          rafRef.current=requestAnimationFrame(loop);
         }
-        rafRef.current = requestAnimationFrame(loop);
+        rafRef.current=requestAnimationFrame(loop);
 
         function getX(e) {
-          const rect = cv.getBoundingClientRect();
-          const cx = e.touches ? e.touches[0].clientX : e.clientX;
-          return (cx - rect.left) * (GW / rect.width);
+          const rect=cv.getBoundingClientRect();
+          const cx=e.touches?e.touches[0].clientX:e.clientX;
+          return (cx-rect.left)*(GW/rect.width);
         }
         function onMove(e) {
-          const g = stRef.current;
-          if (g.lost || g.won) return;
-          const x = getX(e);
-          g.paddle.x = Math.max(0, Math.min(GW - g.paddle.w, x - g.paddle.w / 2));
-          e.preventDefault && e.preventDefault();
+          const g=stRef.current; if (g.lost||g.won) return;
+          const x=getX(e);
+          g.paddle.x=Math.max(0,Math.min(GW-g.paddle.w,x-g.paddle.w/2));
+          e.preventDefault&&e.preventDefault();
         }
         function onTap() {
-          const g = stRef.current;
-          if (g.lost || g.won) { stRef.current = initGame(); return; }
-          if (!g.started) g.started = true;
+          const g=stRef.current;
+          if (g.lost||g.won) { stRef.current=initGame(); return; }
+          if (!g.started) g.started=true;
         }
-        cv.addEventListener('mousemove', onMove);
-        cv.addEventListener('touchmove', onMove, { passive: false });
-        cv.addEventListener('click', onTap);
-        cv.addEventListener('touchstart', onTap, { passive: true });
+        cv.addEventListener('mousemove',onMove);
+        cv.addEventListener('touchmove',onMove,{passive:false});
+        cv.addEventListener('click',onTap);
+        cv.addEventListener('touchstart',onTap,{passive:true});
         return () => {
           cancelAnimationFrame(rafRef.current);
-          cv.removeEventListener('mousemove', onMove);
-          cv.removeEventListener('touchmove', onMove);
-          cv.removeEventListener('click', onTap);
-          cv.removeEventListener('touchstart', onTap);
+          cv.removeEventListener('mousemove',onMove);
+          cv.removeEventListener('touchmove',onMove);
+          cv.removeEventListener('click',onTap);
+          cv.removeEventListener('touchstart',onTap);
         };
       }, []);
 
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#05050f', fontFamily: 'Orbitron, sans-serif' }}>
-          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', background: '#0a0a1a', borderBottom: '1px solid #1a1a2e' }}>
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: 'Orbitron, sans-serif', fontSize: '11px' }}>◀ MENU</button>
-            <span style={{ color: '#ffd700', fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>CANON BREAK</span>
-            <div style={{ width: '60px' }} />
+        <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#04101e', fontFamily:'Orbitron, sans-serif' }}>
+          <div style={{ flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px', background:'#030c18', borderBottom:'1px solid #0a2a3a' }}>
+            <button onClick={onBack} style={{ background:'none', border:'1px solid #2a5a4a', color:'#c8860a', borderRadius:'6px', padding:'4px 10px', cursor:'pointer', fontFamily:'Orbitron, sans-serif', fontSize:'11px' }}>◀ MENU</button>
+            <span style={{ color:'#ffd700', fontSize:'14px', fontWeight:'bold', letterSpacing:'2px', textShadow:'0 0 10px #c8860a' }}>⚓ CANON BREAK ⚓</span>
+            <div style={{ width:'60px' }} />
           </div>
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#05050f' }}>
-            <div style={{ position: 'relative', height: '100%', aspectRatio: `${GW}/${GH}`, maxWidth: '100%', maxHeight: '100%', borderRadius: '10px', overflow: 'hidden' }}>
-              <canvas ref={cvRef} width={GW} height={GH} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
+          <div style={{ flex:1, minHeight:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#04101e' }}>
+            <div style={{ position:'relative', height:'100%', aspectRatio:`${GW}/${GH}`, maxWidth:'100%', maxHeight:'100%', borderRadius:'10px', overflow:'hidden' }}>
+              <canvas ref={cvRef} width={GW} height={GH} style={{ width:'100%', height:'100%', display:'block', touchAction:'none' }} />
             </div>
           </div>
         </div>
